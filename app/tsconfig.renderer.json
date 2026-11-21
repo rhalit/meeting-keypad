@@ -1,0 +1,19 @@
+// The control panel runs as a plain browser <script>, so it is compiled without a module system.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [],
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "src/renderer",
+    "outDir": "dist/renderer"
+  },
+  "include": [
+    "src/renderer"
+  ]
+}

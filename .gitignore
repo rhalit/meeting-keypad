@@ -3,3 +3,4 @@ obj/
 node_modules/
 .env
 .DS_Store
+app/dist/

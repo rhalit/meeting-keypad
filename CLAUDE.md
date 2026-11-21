@@ -26,7 +26,9 @@ Key layout (slot numbers are used everywhere, see protocol/messages.md):
 - `tools/` – `fake-core.mjs` (stand-in app for testing the plugin), `eval-terms.ts` (later).
 
 ## Current phase
-Phase 1: prove the keys update in real time from an external process.
+Phase 2: the scripted mock meeting (`mock/`) drives the keys end to end
+(mock content, `app/` scaffold, pipeline, control panel). Phase 1 (gate G1) is done.
+Not in this step: the overlay card and any Claude API calls (they come next).
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -38,7 +40,8 @@ Do not build features from later phases unless asked.
   (connects, disconnects, every message, and a `Draw slot n` line each time the service redraws a key).
 - Fake core (stand-in app for testing the plugin): `cd tools && npm install && npm run fake-core`.
   Stop it before running the real app; both use port 8765.
-- App (once scaffolded): `cd app && npm run dev`, `npm test`.
+- App: `cd app && npm install && npm run dev` (control panel + WebSocket server), `npm test`.
+  `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play.
 
 ## Logi Actions SDK docs
 - Index for AI tools: https://logitech.github.io/actions-sdk-docs/llms.txt
@@ -65,5 +68,8 @@ Do not build features from later phases unless asked.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
+- `mock/config.json`: `{ "listenerName": "..." }`; meeting lines say `{listener}` where a speaker addresses them.
 - `mock/glossary.json`: `{ "<term>": { "label", "full", "explanation", "example", "category" } }`
+- Term event (every source, mock or live): `TermCandidate { term, label, category, source: "mock" | "live" }`
+  in `app/src/pipeline/terms.ts`.
 - Term spotter output: `{ "terms": [ { "term", "label", "category", "confidence", "reason" } ] }`
