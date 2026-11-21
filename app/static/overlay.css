@@ -1,0 +1,125 @@
+/* Overlay card: dark translucent, readable from arm's length. The window is transparent;
+   only the card is drawn. */
+
+:root {
+  --bg: rgba(13, 17, 23, 0.9);
+  --border: rgba(255, 255, 255, 0.14);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.62);
+  --quote-rule: rgba(255, 255, 255, 0.35);
+  --fade: 150ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity var(--fade) ease-out;
+}
+
+body.visible {
+  opacity: 1;
+}
+
+.card {
+  position: relative;
+  width: 380px;
+  padding: 20px 22px 24px;
+  background: var(--bg);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.explanation {
+  margin: 14px 0 16px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.example {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--quote-rule);
+  font-size: 16px;
+  line-height: 1.4;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.example::before {
+  content: "\201C";
+}
+
+.example::after {
+  content: "\201D";
+}
+
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.75);
+  transform-origin: left center;
+}
+
+@keyframes countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

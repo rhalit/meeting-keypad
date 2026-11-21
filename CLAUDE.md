@@ -28,7 +28,9 @@ Key layout (slot numbers are used everywhere, see protocol/messages.md):
 ## Current phase
 Phase 2: the scripted mock meeting (`mock/`) drives the keys end to end
 (mock content, `app/` scaffold, pipeline, control panel). Phase 1 (gate G1) is done.
-Not in this step: the overlay card and any Claude API calls (they come next).
+Phase 2b is done: a term key opens the overlay card (`app/src/pipeline/overlay.ts` decides,
+`app/src/main/overlayWindow.ts` draws) with explanations from `mock/glossary.json`.
+Not in this step: any Claude API calls (they come next).
 Do not build features from later phases unless asked.
 
 ## Commands

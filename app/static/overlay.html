@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+    <title>Meeting Keypad overlay</title>
+    <link rel="stylesheet" href="overlay.css" />
+  </head>
+  <body>
+    <div id="card" class="card">
+      <h1 id="title"></h1>
+      <span id="chip" class="chip"></span>
+      <p id="explanation" class="explanation"></p>
+      <div class="label">In this meeting:</div>
+      <blockquote id="example" class="example"></blockquote>
+      <div class="track"><div id="bar" class="bar"></div></div>
+    </div>
+    <script src="../dist/renderer/overlayCard.js"></script>
+  </body>
+</html>

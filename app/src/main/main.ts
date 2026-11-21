@@ -4,10 +4,12 @@ import { realClock } from "../pipeline/clock.js";
 import { DEFAULT_PORT, KeypadBridge, PortInUseError, type PressEvent } from "../pipeline/keypadBridge.js";
 import { loadConfig, loadGlossary, loadMeeting, type MeetingLine } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
+import { OverlayController, type HideReason, type OverlayCard } from "../pipeline/overlay.js";
 import type { KeyState } from "../pipeline/protocol.js";
 import { SlotManager } from "../pipeline/slots.js";
 import type { TermCandidate } from "../pipeline/terms.js";
 import { TranscriptBuffer } from "../pipeline/transcriptBuffer.js";
+import { OverlayWindow } from "./overlayWindow.js";
 import type { PanelCommand, PanelLine, PanelSnapshot } from "./panelTypes.js";
 
 const ts = () => new Date().toISOString().slice(11, 23);
@@ -28,8 +30,14 @@ const slots = new SlotManager({ clock });
 const bridge = new KeypadBridge({ initial: slots.getAll(), log: (m) => log(`[keypad] ${m}`) });
 const source = new MockSource(meeting, glossary, clock);
 const playedLines: PanelLine[] = [];
+const overlay = new OverlayController({ clock, lookup: (term) => glossary[term] });
+
+/** Card shows waiting for their first painted frame: card id -> press received (performance.now()). */
+const pressReceivedAt = new Map<number, { term: string; at: number }>();
+const SHOW_BUDGET_MS = 200;
 
 let panel: BrowserWindow | null = null;
+let overlayWindow: OverlayWindow | null = null;
 
 function send(channel: string, payload?: unknown): void {
   if (panel && !panel.isDestroyed()) panel.webContents.send(`panel:${channel}`, payload);
@@ -71,6 +79,7 @@ source.on("unknownTerm", (term: string) => log(`WARNING: term "${term}" is not i
 
 source.on("restart", () => {
   log("restart");
+  overlay.hide("restart");
   slots.reset();
   transcript.clear();
   playedLines.length = 0;
@@ -81,11 +90,17 @@ source.on("state", pushSnapshot);
 source.on("end", () => log("meeting finished"));
 
 bridge.on("press", ({ slot }: PressEvent) => {
+  const received = performance.now();
   const r = slots.press(slot);
   switch (r.kind) {
-    case "term":
-      log(`PRESS slot ${slot}: "${r.term}" -> seen (overlay card comes in the next step)`);
+    case "term": {
+      const outcome = overlay.press(r);
+      const card = overlay.current();
+      if (card && (outcome === "shown" || outcome === "switched")) pressReceivedAt.set(card.id, { term: card.term, at: received });
+      if (outcome === "ignored") log(`WARNING: PRESS slot ${slot}: "${r.term}" has no glossary entry, no card`);
+      else log(`PRESS slot ${slot}: "${r.term}" -> card ${outcome}`);
       break;
+    }
     case "action":
       log(`PRESS slot ${slot}: ${r.action} (not implemented yet)`);
       break;
@@ -94,6 +109,24 @@ bridge.on("press", ({ slot }: PressEvent) => {
   }
 });
 bridge.on("connected", pushSnapshot);
+
+// --- overlay card ----------------------------------------------------------------------------
+
+overlay.on("show", (card: OverlayCard) => overlayWindow?.show(card));
+overlay.on("hide", ({ reason }: { reason: HideReason }) => {
+  log(`overlay: hidden (${reason})`);
+  pressReceivedAt.clear();
+  overlayWindow?.hide();
+});
+
+function onOverlayShown(id: number): void {
+  const p = pressReceivedAt.get(id);
+  if (!p) return;
+  pressReceivedAt.delete(id);
+  const ms = Math.round(performance.now() - p.at);
+  const msg = `overlay: "${p.term}" shown ${ms} ms after press`;
+  log(ms > SHOW_BUDGET_MS ? `WARNING: ${msg} (budget ${SHOW_BUDGET_MS} ms)` : msg);
+}
 bridge.on("disconnected", pushSnapshot);
 
 // --- panel ---------------------------------------------------------------------------------
@@ -137,7 +170,10 @@ function createPanel(): void {
     },
   });
   void panel.loadFile(join(appRoot, "static", "panel.html"));
-  panel.on("closed", () => (panel = null));
+  panel.on("closed", () => {
+    panel = null;
+    app.quit(); // the hidden overlay window would otherwise keep the app alive
+  });
 }
 
 // --- startup -------------------------------------------------------------------------------
@@ -158,6 +194,7 @@ app.whenReady().then(async () => {
     return;
   }
 
+  overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, log: (m) => log(`[overlay] ${m}`) });
   createPanel();
   log(`ready: ${meeting.length} lines, ${Object.keys(glossary).length} glossary terms, listener "${config.listenerName}". Press Play in the panel.`);
   if (process.env.AUTOPLAY === "1") source.play(); // AUTOPLAY=1 npm run dev: start the meeting right away
@@ -169,6 +206,8 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
   source.dispose();
+  overlay.dispose();
+  overlayWindow?.destroy();
   slots.dispose();
   void bridge.stop();
 });
