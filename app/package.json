@@ -8,7 +8,8 @@
     "build": "tsc -p . && tsc -p tsconfig.renderer.json",
     "dev": "npm run build && electron .",
     "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "npm run build && node dist/tools/smoke.js"
   },
   "dependencies": {
     "ws": "8.22.1"

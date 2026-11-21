@@ -274,4 +274,20 @@ describe("SlotManager", () => {
     slots.add(cand("b")); // opened before reset, allowed again after reset
     expect(termAt(0)).toBe("b");
   });
+
+  it("action overrides change slots 6-8 only, emit the slot and are cleared by reset", () => {
+    const changes: KeyState[][] = [];
+    slots.on("change", (k: KeyState[]) => changes.push(k));
+    slots.setActionOverride(6, { state: "busy" });
+    expect(slots.getAll()[6]).toEqual({ slot: 6, label: "Catch\nup", bg: "#30363D", state: "busy" });
+    slots.setActionOverride(7, { label: "Saved ✓", bg: "#2DA44E" });
+    expect(slots.getAll()[7]).toEqual({ slot: 7, label: "Saved ✓", bg: "#2DA44E", state: "shown" });
+    slots.setActionOverride(3, { state: "busy" }); // term slot: ignored
+    slots.setActionOverride(8, null); // nothing to clear: no event
+    expect(changes.map((c) => c.map((k) => k.slot))).toEqual([[6], [7]]);
+    slots.reset();
+    expect(slots.getAll()[6].state).toBe("shown");
+    expect(slots.getAll()[7].label).toBe("Save");
+    expect(changes[changes.length - 1].map((k) => k.slot).sort()).toEqual([6, 7]);
+  });
 });

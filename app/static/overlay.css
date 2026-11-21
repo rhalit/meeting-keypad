@@ -8,6 +8,9 @@
   --muted: rgba(255, 255, 255, 0.62);
   --quote-rule: rgba(255, 255, 255, 0.35);
   --fade: 150ms;
+  --accent: rgba(255, 255, 255, 0.62);
+  --success: #3fb950;
+  --error: #ff6b6b;
 }
 
 * {
@@ -121,5 +124,97 @@ h1 {
   }
   to {
     transform: scaleX(0);
+  }
+}
+
+/* --- card kinds ------------------------------------------------------------------------- */
+
+.card[data-kind="term"] .text-view,
+.card[data-kind="text"] .term-view {
+  display: none;
+}
+
+.card.no-timer .track {
+  display: none;
+}
+
+.card[data-tone="success"] {
+  --accent: var(--success);
+  border-left: 4px solid var(--success);
+}
+
+.card[data-tone="error"] {
+  --accent: var(--error);
+  border-left: 4px solid var(--error);
+}
+
+/* --- text card (Catch-up, Save, errors) ------------------------------------------------- */
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.text-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.text-body {
+  margin-top: 12px;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.text-body[hidden] {
+  display: none;
+}
+
+.text-body p {
+  margin: 0 0 8px;
+}
+
+.text-body ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.text-body li {
+  margin-bottom: 8px;
+}
+
+.text-body li:last-child,
+.text-body p:last-child {
+  margin-bottom: 0;
+}
+
+.text-body strong {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.thinking {
+  color: var(--muted);
+}
+
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -2px;
+  background: rgba(255, 255, 255, 0.75);
+  animation: blink 900ms steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }

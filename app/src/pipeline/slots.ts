@@ -9,6 +9,7 @@ import {
   emptyKey,
   isValidSlot,
   type KeyState,
+  type SlotState,
 } from "./protocol.js";
 import { normalizeTerm, type TermCandidate } from "./terms.js";
 
@@ -21,6 +22,18 @@ export interface SlotManagerOptions {
   /** At most this many placements per window; extras queue. */
   maxNewPerWindow?: number;
   windowMs?: number;
+}
+
+/** Temporary look of an action key (slots 6-8), merged over its static label. */
+export interface ActionOverride {
+  label?: string;
+  bg?: string;
+  state?: SlotState;
+}
+
+/** What the Catch-up / Save controllers need from SlotManager. */
+export interface ActionKeys {
+  setActionOverride(slot: number, override: ActionOverride | null): void;
 }
 
 export type PressResult =
@@ -46,7 +59,7 @@ interface Placed {
  * - Terms that were opened never come back. At most 2 placements per 10 s; extras queue (FIFO).
  * - Emits `change` with only the slots that changed, as complete protocol KeyStates.
  */
-export class SlotManager extends EventEmitter {
+export class SlotManager extends EventEmitter implements ActionKeys {
   private readonly clock: Clock;
   private readonly newMs: number;
   private readonly minOnScreenMs: number;
@@ -58,6 +71,7 @@ export class SlotManager extends EventEmitter {
   private opened = new Set<string>();
   private placements: number[] = [];
   private pumpTimer: TimerHandle | null = null;
+  private overrides = new Map<number, ActionOverride>();
 
   constructor(opts: SlotManagerOptions) {
     super();
@@ -95,6 +109,14 @@ export class SlotManager extends EventEmitter {
     return { kind: "term", slot, term: p.candidate.term };
   }
 
+  /** Change how an action key (6-8) looks, e.g. busy or "Saved ✓"; null restores it. */
+  setActionOverride(slot: number, override: ActionOverride | null): void {
+    if (!isValidSlot(slot) || slot < TERM_SLOTS) return;
+    if (override) this.overrides.set(slot, { ...override });
+    else if (!this.overrides.delete(slot)) return;
+    this.emitChange([slot]);
+  }
+
   /** All 9 slots in protocol format. */
   getAll(): KeyState[] {
     const out: KeyState[] = [];
@@ -116,9 +138,10 @@ export class SlotManager extends EventEmitter {
     return this.queue.map((q) => q.candidate.term);
   }
 
-  /** Back to the initial state (empty term slots, nothing queued or opened). */
+  /** Back to the initial state (empty term slots, nothing queued or opened, action keys restored). */
   reset(): void {
-    const changed: number[] = [];
+    const changed: number[] = [...this.overrides.keys()];
+    this.overrides.clear();
     this.slots.forEach((p, i) => {
       if (!p) return;
       this.cancelNewTimer(p);
@@ -201,7 +224,7 @@ export class SlotManager extends EventEmitter {
   }
 
   private keyState(slot: number): KeyState {
-    if (slot >= TERM_SLOTS) return actionKey(slot);
+    if (slot >= TERM_SLOTS) return { ...actionKey(slot), ...this.overrides.get(slot) };
     const p = this.slots[slot];
     if (!p) return emptyKey(slot);
     const { label, category } = p.candidate;

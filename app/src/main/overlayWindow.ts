@@ -18,13 +18,15 @@ export interface OverlayWindowOptions {
  * shown with showInactive) and is click-through, so the meeting app keeps keyboard and mouse.
  *
  * Show: send card -> renderer measures and replies with its height -> resize + showInactive ->
- * reveal (fade in) -> renderer reports the painted frame. Hide: fade out, then hide the window.
+ * reveal (fade in) -> renderer reports the painted frame. Update (streaming text card): send the
+ * new card -> renderer re-measures -> resize only. Hide: fade out, then hide the window.
  */
 export class OverlayWindow {
   private readonly win: BrowserWindow;
   private loaded = false;
   private pending: OverlayCard | null = null;
   private currentId: number | null = null;
+  private revealedId: number | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly opts: OverlayWindowOptions) {
@@ -83,9 +85,21 @@ export class OverlayWindow {
     this.win.webContents.send("overlay:card", card);
   }
 
+  /** Same card id with new content (text card filling in). */
+  update(card: OverlayCard): void {
+    if (this.win.isDestroyed()) return;
+    if (!this.loaded) {
+      if (this.pending?.id === card.id) this.pending = card;
+      return;
+    }
+    if (card.id !== this.currentId) return;
+    this.win.webContents.send("overlay:update", card);
+  }
+
   hide(): void {
     this.pending = null;
     this.currentId = null;
+    this.revealedId = null;
     if (this.win.isDestroyed() || !this.win.isVisible()) return;
     this.win.webContents.send("overlay:hide");
     this.cancelHide();
@@ -112,6 +126,8 @@ export class OverlayWindow {
       width: OVERLAY_WIDTH,
       height,
     });
+    if (this.revealedId === msg.id) return; // a later size of a visible card: resize only
+    this.revealedId = msg.id;
     if (!this.win.isVisible()) this.win.showInactive();
     this.win.webContents.send("overlay:reveal", msg.id);
   };

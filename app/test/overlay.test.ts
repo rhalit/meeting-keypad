@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadGlossary, type Glossary } from "../src/pipeline/mockData.js";
-import { OverlayController, type OverlayCard } from "../src/pipeline/overlay.js";
+import { OverlayController, type OverlayCard, type TermCard, type TextCard } from "../src/pipeline/overlay.js";
 import { CATEGORY_COLORS } from "../src/pipeline/protocol.js";
 import { SlotManager, type PressResult } from "../src/pipeline/slots.js";
 import { FakeClock } from "./fakeClock.js";
@@ -23,8 +23,9 @@ describe("OverlayController", () => {
     shown = [];
     overlay.on("show", (c: OverlayCard) => {
       shown.push(c);
-      events.push(`show ${c.term}`);
+      events.push(`show ${c.kind === "term" ? c.term : `text ${c.title}`}`);
     });
+    overlay.on("update", (c: TextCard) => events.push(`update ${c.body}${c.streaming ? "" : " (done)"}`));
     overlay.on("hide", ({ reason }: { reason: string }) => events.push(`hide ${reason}`));
   });
 
@@ -41,7 +42,8 @@ describe("OverlayController", () => {
       example: e.example,
       durationMs: 15_000,
     });
-    expect(overlay.current()?.term).toBe("LoRA");
+    expect((overlay.current() as TermCard).term).toBe("LoRA");
+    expect(overlay.current()?.kind).toBe("term");
   });
 
   it("hides the card when the same key is pressed while it is visible", () => {
@@ -57,9 +59,9 @@ describe("OverlayController", () => {
     overlay.press(term(0, "RAG"));
     clock.advance(10_000);
     expect(overlay.press(term(1, "vector database"))).toBe("switched");
-    expect(overlay.current()?.term).toBe("vector database");
+    expect((overlay.current() as TermCard).term).toBe("vector database");
     clock.advance(14_999);
-    expect(overlay.current()?.term).toBe("vector database");
+    expect((overlay.current() as TermCard).term).toBe("vector database");
     clock.advance(1);
     expect(overlay.current()).toBeNull();
     expect(events).toEqual(["show RAG", "show vector database", "hide timeout"]);
@@ -96,7 +98,7 @@ describe("OverlayController", () => {
     ] as PressResult[]) {
       expect(overlay.press(r)).toBe("ignored");
     }
-    expect(overlay.current()?.term).toBe("RAG");
+    expect((overlay.current() as TermCard).term).toBe("RAG");
     expect(events).toEqual(["show RAG"]);
   });
 
@@ -130,5 +132,46 @@ describe("OverlayController", () => {
     expect(overlay.press(slots.press(6))).toBe("ignored");
     expect(overlay.current()?.title).toBe(glossary["RAG"].full);
     slots.dispose();
+  });
+
+  describe("text cards", () => {
+    it("shows, fills in while streaming, then auto-hides after finishText", () => {
+      const id = overlay.showText({ eyebrow: "Catch-up", title: "Catch-up", streaming: true, durationMs: null });
+      expect(overlay.isVisible(id)).toBe(true);
+      clock.advance(60_000); // no timer while streaming
+      expect(overlay.updateText(id, "- Said: a")).toBe(true);
+      expect(overlay.updateText(id, "- Said: a")).toBe(true); // unchanged: no event
+      expect(overlay.finishText(id, 20_000, "- Said: ab")).toBe(true);
+      expect(overlay.current()).toMatchObject({ kind: "text", body: "- Said: ab", streaming: false, durationMs: 20_000 });
+      clock.advance(20_000);
+      expect(overlay.current()).toBeNull();
+      expect(events).toEqual(["show text Catch-up", "update - Said: a", "update - Said: ab (done)", "hide timeout"]);
+    });
+
+    it("a term press replaces a text card; updates to the old card are refused", () => {
+      const id = overlay.showText({ eyebrow: "Catch-up", title: "Catch-up", streaming: true, durationMs: null });
+      expect(overlay.press(term(0, "RAG"))).toBe("switched");
+      expect(overlay.updateText(id, "late")).toBe(false);
+      expect(overlay.finishText(id, 1000)).toBe(false);
+      expect(overlay.isVisible(id)).toBe(false);
+      expect((overlay.current() as TermCard).term).toBe("RAG");
+    });
+
+    it("a text card replaces a term card, and the term key then opens it again (not a toggle)", () => {
+      overlay.press(term(0, "RAG"));
+      overlay.showText({ eyebrow: "Save", title: "Saved", durationMs: 3000 });
+      expect(overlay.press(term(0, "RAG"))).toBe("switched");
+      clock.advance(15_000);
+      expect(overlay.current()).toBeNull();
+      expect(clock.pending()).toBe(0);
+    });
+
+    it("a text card with a duration hides itself", () => {
+      overlay.showText({ eyebrow: "Save", title: "Saved", tone: "success", durationMs: 3000 });
+      clock.advance(2999);
+      expect(overlay.current()).toMatchObject({ tone: "success", streaming: false, body: "" });
+      clock.advance(1);
+      expect(overlay.current()).toBeNull();
+    });
   });
 });

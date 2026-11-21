@@ -30,7 +30,9 @@ Phase 2: the scripted mock meeting (`mock/`) drives the keys end to end
 (mock content, `app/` scaffold, pipeline, control panel). Phase 1 (gate G1) is done.
 Phase 2b is done: a term key opens the overlay card (`app/src/pipeline/overlay.ts` decides,
 `app/src/main/overlayWindow.ts` draws) with explanations from `mock/glossary.json`.
-Not in this step: any Claude API calls (they come next).
+Phase 2c: Catch-up (slot 6) and Save (slot 7) work on the mock meeting through an
+OpenAI-compatible LLM (`app/src/pipeline/llm.ts`, controllers `catchUp.ts` / `save.ts`).
+Save appends to `output/saved-ideas.md` (gitignored). "Was that for me?" (slot 8) is not built yet.
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -43,6 +45,8 @@ Do not build features from later phases unless asked.
 - Fake core (stand-in app for testing the plugin): `cd tools && npm install && npm run fake-core`.
   Stop it before running the real app; both use port 8765.
 - App: `cd app && npm install && npm run dev` (control panel + WebSocket server), `npm test`.
+- Real model smoke run (Catch-up + Save on the mock transcript): `cd app && npm run smoke`
+  (writes `output/smoke-saved-ideas.md`). Tests never call a real model (`test/fakeLlm.ts`).
   `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play.
 
 ## Logi Actions SDK docs
@@ -62,11 +66,13 @@ Do not build features from later phases unless asked.
   reconnect to the app every 2 s.
 - Key labels: at most 2 lines of 8 characters. The app shortens them; the full term only appears in the overlay.
 - A term placed on a key never moves to another key.
-- Never commit `app/.env`. API keys arrive later: Anthropic in Phase 2, Deepgram in Phase 3.
+- Never commit `app/.env`, never print or log the key. LLM settings live there:
+  `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
+  (see `app/.env.example` for Groq / Ollama / OpenRouter). Deepgram arrives in Phase 3.
 - The human checks the physical keypad. After every plugin change: build, then say exactly
   what should be visible on which key.
-- Models (later phases): `claude-haiku-5-5` for term spotting, explanations and Save;
-  `claude-sonnet-5-5` for Catch-up. Use structured outputs for JSON.
+- LLM: any OpenAI-compatible chat API from `app/.env` (currently Groq `openai/gpt-oss-120b`).
+  Use structured outputs (json_schema, strict) for JSON; the client falls back to JSON mode + validation.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`

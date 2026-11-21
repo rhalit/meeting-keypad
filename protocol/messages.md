@@ -60,8 +60,13 @@
 | `new`   | `bg` colour, label, bright white border (app switches to `shown` after 3 s) |
 | `shown` | `bg` colour, label                                                      |
 | `seen`  | `bg` dimmed to ~40 %, grey label (term already opened)                  |
-| `busy`  | label followed by "…" (Claude is working)                               |
+| `busy`  | label followed by "…" (the model is working: Catch-up, Save)            |
 | `alert` | red `#E5484D` background, white label (app may toggle to make it pulse) |
+
+### Action key feedback (no extra states)
+- Catch-up (slot 6) and Save (slot 7) are `busy` while the model works, then `shown` again.
+- After a save, slot 7 is sent as `{ "slot": 7, "label": "Saved ✓", "bg": "#2DA44E", "state": "shown" }`
+  for 1.5 s, then back to its normal `Save` label.
 
 ## When the app is unreachable
 The plugin blanks all keys and shows `No app` on slot 4, so it is obvious on the device.

@@ -9,8 +9,18 @@ export interface PanelKey extends KeyState {
   term?: string;
 }
 
+/** Model connection as shown in the panel header. */
+export interface PanelLlm {
+  state: "checking" | "ok" | "error";
+  /** Short status line, e.g. "Model ready · openai/gpt-oss-120b · 412 ms". */
+  text: string;
+  /** What to do, when state is "error". */
+  advice?: string;
+}
+
 export interface PanelSnapshot {
   playback: PlaybackState;
+  llm: PanelLlm;
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];

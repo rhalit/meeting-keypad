@@ -15,8 +15,14 @@ interface PanelPlayback {
   duration: number;
   ended: boolean;
 }
+interface PanelLlmMsg {
+  state: "checking" | "ok" | "error";
+  text: string;
+  advice?: string;
+}
 interface PanelSnapshotMsg {
   playback: PanelPlayback;
+  llm: PanelLlmMsg;
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];
@@ -45,6 +51,8 @@ const speed1Btn = $<HTMLButtonElement>("speed1");
 const speed2Btn = $<HTMLButtonElement>("speed2");
 const timeEl = $("time");
 const pluginEl = $("plugin");
+const llmEl = $("llm");
+const llmErrorEl = $("llm-error");
 const gridEl = $("grid");
 const queueEl = $("queue");
 const transcriptEl = $("transcript");
@@ -59,6 +67,10 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
   timeEl.textContent = `${fmt(s.playback.position)} / ${fmt(s.playback.duration)}`;
   pluginEl.textContent = s.pluginsConnected > 0 ? "Keypad connected" : "Keypad not connected";
   pluginEl.classList.toggle("ok", s.pluginsConnected > 0);
+  llmEl.textContent = s.llm.text;
+  llmEl.className = `llm-${s.llm.state}`;
+  llmErrorEl.hidden = s.llm.state !== "error" || !s.llm.advice;
+  llmErrorEl.textContent = s.llm.advice ?? "";
 
   gridEl.replaceChildren(
     ...s.keys.map((k) => {

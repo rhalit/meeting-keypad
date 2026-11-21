@@ -7,12 +7,19 @@
     <link rel="stylesheet" href="overlay.css" />
   </head>
   <body>
-    <div id="card" class="card">
-      <h1 id="title"></h1>
-      <span id="chip" class="chip"></span>
-      <p id="explanation" class="explanation"></p>
-      <div class="label">In this meeting:</div>
-      <blockquote id="example" class="example"></blockquote>
+    <div id="card" class="card" data-kind="term">
+      <section class="term-view">
+        <h1 id="title"></h1>
+        <span id="chip" class="chip"></span>
+        <p id="explanation" class="explanation"></p>
+        <div class="label">In this meeting:</div>
+        <blockquote id="example" class="example"></blockquote>
+      </section>
+      <section class="text-view">
+        <div id="text-eyebrow" class="eyebrow"></div>
+        <h2 id="text-title" class="text-title"></h2>
+        <div id="text-body" class="text-body"></div>
+      </section>
       <div class="track"><div id="bar" class="bar"></div></div>
     </div>
     <script src="../dist/renderer/overlayCard.js"></script>
