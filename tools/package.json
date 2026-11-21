@@ -1,0 +1,11 @@
+{
+  "name": "meeting-keypad-tools",
+  "private": true,
+  "description": "Dev tools for Meeting Keypad (fake-core: stand-in app for testing the plugin)",
+  "scripts": {
+    "fake-core": "node fake-core.mjs"
+  },
+  "dependencies": {
+    "ws": "8.22.1"
+  }
+}

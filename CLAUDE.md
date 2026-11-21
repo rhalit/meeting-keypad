@@ -23,7 +23,7 @@ Key layout (slot numbers are used everywhere, see protocol/messages.md):
   - Renderer: overlay card (always on top, never steals focus) and a small control panel.
 - `protocol/messages.md` – the contract between plugin and app. Change it FIRST, then both sides.
 - `mock/` – scripted meeting (`meeting.json`), `glossary.json`, optional `meeting.mp3` ("Demo mode").
-- `tools/` – `fake-core.ts` (stand-in app for testing the plugin), `eval-terms.ts` (later).
+- `tools/` – `fake-core.mjs` (stand-in app for testing the plugin), `eval-terms.ts` (later).
 
 ## Current phase
 Phase 1: prove the keys update in real time from an external process.
@@ -34,7 +34,11 @@ Do not build features from later phases unless asked.
 - Plugin hot reload: `cd plugin/MeetingKeysPlugin/src && dotnet watch build`
 - A successful build writes `~/Library/Application Support/Logi/LogiPluginService/Plugins/MeetingKeysPlugin.link`.
 - If a plugin change doesn't show up: Options+ → Settings → "Restart Logi Plugin Service".
-- App (once scaffolded): `cd app && npm run dev`, `npm test`, `npm run fake-core`.
+- Plugin log: `~/Library/Application Support/Logi/LogiPluginService/Logs/plugin_logs/MeetingKeys.log`
+  (connects, disconnects, every message, and a `Draw slot n` line each time the service redraws a key).
+- Fake core (stand-in app for testing the plugin): `cd tools && npm install && npm run fake-core`.
+  Stop it before running the real app; both use port 8765.
+- App (once scaffolded): `cd app && npm run dev`, `npm test`.
 
 ## Logi Actions SDK docs
 - Index for AI tools: https://logitech.github.io/actions-sdk-docs/llms.txt
