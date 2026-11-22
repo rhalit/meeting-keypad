@@ -12,6 +12,8 @@
     "smoke": "npm run build && node dist/tools/smoke.js",
     "smoke:live": "npm run build && node dist/tools/liveSmoke.js",
     "eval:terms": "npm run build && node dist/tools/evalTerms.js",
+    "record:live": "npm run build && node dist/tools/recordLive.js",
+    "replay:live": "npm run build && node dist/tools/replayLive.js",
     "build:audiotee": "../tools/audiotee/build.sh"
   },
   "dependencies": {

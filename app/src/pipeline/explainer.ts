@@ -7,14 +7,15 @@ import { DEFAULT_TIMEOUT_MS, errorAdvice, toLlmError, withTimeout, type JsonSpec
 import { describeListener, type ListenerProfile } from "./mockData.js";
 import type { CardEntry } from "./overlay.js";
 import { EXPLAIN_SCHEMA, explainMessages } from "./prompts.js";
-import { isCategory, type Category } from "./protocol.js";
+import { exampleSentence } from "./example.js";
+import type { Category } from "./protocol.js";
 import { normalizeTerm, type TermCandidate } from "./terms.js";
 import type { TranscriptLine } from "./transcriptBuffer.js";
 
+/** The model writes only the text; the card's category is always the key's (from the spotter). */
 export interface Explanation {
   full: string;
   explanation: string;
-  category: Category;
 }
 
 export const EXPLAIN_SPEC: JsonSpec<Explanation> = {
@@ -26,7 +27,6 @@ export const EXPLAIN_SPEC: JsonSpec<Explanation> = {
     return {
       full: typeof o.full === "string" ? o.full.trim() : "",
       explanation: o.explanation.trim(),
-      category: isCategory(o.category) ? o.category : "Eng",
     };
   },
 };
@@ -42,6 +42,8 @@ interface Heard {
   candidate: TermCandidate;
   line?: TranscriptLine;
   context: TranscriptLine[];
+  /** "In this meeting": only the sentence(s) with the heard words. */
+  example: string;
 }
 
 export interface ExplainerOptions {
@@ -67,6 +69,8 @@ export class Explainer extends EventEmitter {
   private readonly o: Required<Omit<ExplainerOptions, "onLlmOutcome">> & Pick<ExplainerOptions, "onLlmOutcome">;
   private cache = new Map<string, CacheEntry>();
   private heard = new Map<string, Heard>();
+  /** Category of the key each term was placed on (kept across meetings with the cache). */
+  private categories = new Map<string, Category>();
   private inFlight = new Set<Promise<void>>();
 
   constructor(opts: ExplainerOptions) {
@@ -74,15 +78,25 @@ export class Explainer extends EventEmitter {
     this.o = { timeoutMs: DEFAULT_TIMEOUT_MS, ...opts };
   }
 
-  noteHeard(candidate: TermCandidate, line: TranscriptLine | undefined, context: TranscriptLine[] = []): void {
+  /**
+   * Where a term was heard: `line` (+ `context` before it) and the words as transcribed (`heard`).
+   * The card's example is the sentence(s) with those words, at most ~25 words.
+   */
+  noteHeard(candidate: TermCandidate, line: TranscriptLine | undefined, context: TranscriptLine[] = [], heard = ""): void {
     const key = normalizeTerm(candidate.term);
-    if (key && !this.heard.has(key)) this.heard.set(key, { candidate, line, context });
+    if (!key || this.heard.has(key)) return;
+    this.categories.set(key, candidate.category);
+    // The previous line too: a sentence (and the heard words) may start there.
+    const text = [...context.slice(-1), ...(line ? [line] : [])].map((l) => l.text).join(" ");
+    this.heard.set(key, { candidate, line, context, example: text ? exampleSentence(text, heard, candidate.term) : "" });
   }
 
-  /** Start the explanation unless it is cached or on its way. */
-  prefetch(term: string): void {
+  /** Start the explanation unless it is cached or on its way. The candidate's category is the key's. */
+  prefetch(candidate: TermCandidate | string): void {
+    const term = typeof candidate === "string" ? candidate : candidate.term;
     const key = normalizeTerm(term);
     if (!key) return;
+    if (typeof candidate !== "string") this.categories.set(key, candidate.category);
     const c = this.cache.get(key);
     if (c && c.status !== "failed") return;
     this.cache.set(key, { status: "pending", since: this.o.clock.now() });
@@ -102,9 +116,8 @@ export class Explainer extends EventEmitter {
     const c = this.cache.get(key);
     if (!h && !c) return undefined;
     const base = {
-      label: h?.candidate.label ?? term,
-      category: h?.candidate.category ?? (c?.status === "ready" ? c.value.category : "Eng"),
-      example: h?.line?.text ?? "",
+      category: h?.candidate.category ?? this.categories.get(key) ?? "Other",
+      example: h?.example ?? "",
     };
     if (c?.status === "ready") return { ...base, full: c.value.full || term, explanation: c.value.explanation, pending: false };
     if (c?.status === "failed") {
@@ -141,7 +154,7 @@ export class Explainer extends EventEmitter {
       const ms = clock.now() - started;
       this.cache.set(key, { status: "ready", value, ms });
       const words = value.explanation.split(/\s+/).length;
-      log(`explain: "${term}" ready in ${ms} ms (${words} words, ${value.category}${value.full ? `, "${value.full}"` : ""})`);
+      log(`explain: "${term}" ready in ${ms} ms (${words} words${value.full ? `, "${value.full}"` : ""})`);
       this.o.onLlmOutcome?.({ ok: true });
       this.emit("ready", term);
     } catch (err) {

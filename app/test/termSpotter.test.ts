@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LlmError } from "../src/pipeline/llm.js";
-import { isValidLabel, labelMatchesTerm, repairLabel } from "../src/pipeline/protocol.js";
+import { SPOTTER_SCHEMA } from "../src/pipeline/prompts.js";
+import { CATEGORIES } from "../src/pipeline/protocol.js";
 import { SlotManager } from "../src/pipeline/slots.js";
-import { TermSpotter, findLine, type SpotInfo } from "../src/pipeline/termSpotter.js";
+import { TermSpotter, editDistance, findLine, heardInNew, heardSpan, variantOf, type SpotInfo } from "../src/pipeline/termSpotter.js";
 import type { TermCandidate } from "../src/pipeline/terms.js";
 import { FakeClock } from "./fakeClock.js";
 import { FakeLlmClient, flush } from "./fakeLlm.js";
@@ -10,8 +11,8 @@ import { FakeLlmClient, flush } from "./fakeLlm.js";
 const S = 1000;
 const listener = { name: "Rhali", knows: "robotics student" };
 
-function raw(term: string, extra: Partial<{ heard: string; label: string; category: string; confidence: number; reason: string }> = {}) {
-  return { term, heard: term, label: term.slice(0, 8), category: "AI", confidence: 0.9, reason: "jargon", ...extra };
+function raw(term: string, extra: Partial<{ heard: string; full: string; variantOf: string; category: string; confidence: number; reason: string }> = {}) {
+  return { term, heard: term, full: term, variantOf: "", category: "Tech", confidence: 0.9, reason: "jargon", ...extra };
 }
 
 describe("TermSpotter", () => {
@@ -175,16 +176,16 @@ describe("TermSpotter", () => {
       line(0, "We use RAG with a vector database behind a feature flag and a canary release.");
       llm.calls[0].end({
         terms: [
-          raw("feature flag", { confidence: 0.75, category: "Eng" }),
-          raw("RAG", { confidence: 0.95, label: "RAG" }),
-          raw("canary release", { confidence: 0.69, category: "Infra" }),
-          raw("vector database", { confidence: 0.9, label: "Vector\nDB" }),
+          raw("feature flag", { confidence: 0.75 }),
+          raw("RAG", { confidence: 0.95 }),
+          raw("canary release", { confidence: 0.69 }),
+          raw("vector database", { confidence: 0.9 }),
         ],
       });
       await flush();
       expect(terms.map((t) => t.c)).toEqual([
-        { term: "RAG", label: "RAG", category: "AI", source: "live" },
-        { term: "vector database", label: "Vector\nDB", category: "AI", source: "live" },
+        { term: "RAG", category: "Tech", source: "live" },
+        { term: "vector database", category: "Tech", source: "live" },
       ]);
       expect(logs.some((l) => l.includes('skip "canary release" (confidence 0.69)'))).toBe(true);
       expect(logs.some((l) => l.includes('skip "feature flag" (more than 2'))).toBe(true);
@@ -197,7 +198,7 @@ describe("TermSpotter", () => {
       clock.advance(8 * S);
       line(8, "More about rags.");
       expect(userMsg(1)).toContain("Already shown: RAG");
-      llm.calls[1].end({ terms: [raw("RAGs"), raw("rag")] });
+      llm.calls[1].end({ terms: [raw("RAGs", { heard: "rags" }), raw("rag", { heard: "rags" })] });
       await flush();
       expect(terms).toHaveLength(1);
     });
@@ -209,13 +210,13 @@ describe("TermSpotter", () => {
           raw("the very long phrase here"),
           raw("Rhali"),
           raw("SOC 2", { category: "Crypto" }),
-          raw("SOC 2", { category: "Security", confidence: 0.8 }),
-          raw("SOC 2", { category: "Security", confidence: 0.8 }),
+          raw("SOC 2", { category: "Law", confidence: 0.8 }),
+          raw("SOC 2", { category: "Law", confidence: 0.8 }),
         ],
       });
       await flush();
       expect(terms.map((t) => t.c.term)).toEqual(["SOC 2"]);
-      expect(terms[0].c.category).toBe("Security");
+      expect(terms[0].c.category).toBe("Law");
     });
 
     it("an answer with malformed items keeps the good ones", async () => {
@@ -231,19 +232,81 @@ describe("TermSpotter", () => {
       clock.advance(8 * S);
       llm.calls[0].end({ terms: [] });
       await flush();
-      llm.calls[1].end({ terms: [raw("SOC 2", { heard: "so two", category: "Security", label: "SOC 2" })] });
+      llm.calls[1].end({ terms: [raw("SOC 2", { heard: "so two", category: "Law" })] });
       await flush();
       expect(terms[0].info.line.text).toBe("The bank pilot won't sign until we have so two.");
       expect(terms[0].info.context.map((l) => l.text)).toEqual(["Moving on to security."]);
     });
-  });
 
-  it("repairs labels that break the 2 x 8 rule", async () => {
-    line(0, "quantization and burn multiple");
-    llm.calls[0].end({ terms: [raw("quantization", { label: "Quantization" }), raw("burn multiple", { label: "burn multiple ratio", category: "Biz" })] });
-    await flush();
-    expect(terms.map((t) => t.c.label)).toEqual(["Quantiz-\nation", "Burn\nmultiple"]);
-    for (const t of terms) expect(isValidLabel(t.c.label)).toBe(true);
+    it("accepts a term only if its heard words are in the NEW lines, not only in the context", async () => {
+      line(0, "Today we talk about dopamine and NSDR.");
+      llm.calls[0].end({ terms: [] });
+      await flush();
+      clock.advance(8 * S);
+      line(8, "It helps you focus.");
+      expect(userMsg(1)).toContain("Earlier (context only");
+      llm.calls[1].end({ terms: [raw("dopamine", { category: "Science" }), raw("NSDR", { heard: "nsdr", category: "Health" })] });
+      await flush();
+      expect(terms).toHaveLength(0);
+      expect(logs.some((l) => l.includes('skip "dopamine" (not heard in new lines'))).toBe(true);
+    });
+
+    it("accepts a term cut by a line boundary (starts in the last context line)", async () => {
+      line(0, "Then you store all of it in a vector");
+      llm.calls[0].end({ terms: [] });
+      await flush();
+      clock.advance(8 * S);
+      line(6, "database, so search works by meaning.");
+      llm.calls[1].end({ terms: [raw("vector database", { heard: "vector database" })] });
+      await flush();
+      expect(terms.map((t) => t.c.term)).toEqual(["vector database"]);
+    });
+
+    it("drops variants and mishearings of terms already shown", async () => {
+      line(0, "Try NSDR, non-sleep deep rest.");
+      llm.calls[0].end({ terms: [raw("NSDR", { full: "non-sleep deep rest", category: "Health" })] });
+      await flush();
+      clock.advance(8 * S);
+      line(8, "NSTR is great, non sleep deep rest really works, also Yoga Nidra.");
+      llm.calls[1].end({
+        terms: [
+          raw("NSTR", { category: "Health" }),
+          raw("non-sleep deep rest", { heard: "non sleep deep rest", category: "Health" }),
+          raw("Yoga Nidra", { variantOf: "NSDR", category: "Health" }),
+        ],
+      });
+      await flush();
+      expect(terms.map((t) => t.c.term)).toEqual(["NSDR"]);
+      expect(logs.filter((l) => l.includes('(variant of "NSDR")'))).toHaveLength(3);
+    });
+
+    it("drops a term whose full name matches one already shown", async () => {
+      line(0, "We use RAG here.");
+      llm.calls[0].end({ terms: [raw("RAG", { full: "Retrieval-augmented generation" })] });
+      await flush();
+      clock.advance(8 * S);
+      line(8, "Retrieval augmented generation again.");
+      llm.calls[1].end({ terms: [raw("retrieval augmented generation", { full: "retrieval-augmented generation" })] });
+      await flush();
+      expect(terms.map((t) => t.c.term)).toEqual(["RAG"]);
+    });
+
+    it("reports when the heard words were spoken, from word timestamps", async () => {
+      spotter.addLine({
+        t: 10,
+        text: "We use RAG daily.",
+        words: [
+          { text: "We", start: 10, end: 10.2 },
+          { text: "use", start: 10.3, end: 10.5 },
+          { text: "RAG", start: 10.6, end: 11.0 },
+          { text: "daily.", start: 11.1, end: 11.5 },
+        ],
+      });
+      llm.calls[0].end({ terms: [raw("RAG")] });
+      await flush();
+      expect(terms[0].info.spokenAt).toBe(11.0);
+      expect(terms[0].info.full).toBe("RAG");
+    });
   });
 
   it("reset() aborts the call in flight and forgets the meeting", async () => {
@@ -264,7 +327,7 @@ describe("TermSpotter", () => {
     const slots = new SlotManager({ clock });
     spotter.on("term", (c: TermCandidate) => slots.add(c));
     line(0, "RAG");
-    llm.calls[0].end({ terms: [raw("RAG", { label: "RAG" })] });
+    llm.calls[0].end({ terms: [raw("RAG")] });
     await flush();
     expect(slots.termAt(0)).toBe("RAG");
     expect(slots.candidateAt(0)?.source).toBe("live");
@@ -284,39 +347,64 @@ describe("findLine", () => {
   });
 });
 
-describe("labelMatchesTerm", () => {
-  it("accepts shortenings of the term and rejects paraphrases", () => {
-    expect(labelMatchesTerm("Vector\nDB", "vector database")).toBe(true);
-    expect(labelMatchesTerm("p95\nlatency", "p95 latency")).toBe(true);
-    expect(labelMatchesTerm("Quanti-\nzation", "quantization")).toBe(true);
-    expect(labelMatchesTerm("Model\nsize", "quantization")).toBe(false);
-    expect(labelMatchesTerm("Agile\nSprint", "sprints")).toBe(false);
+describe("heardInNew", () => {
+  const ctx = [{ t: 0, text: "Store it in a vector" }];
+  it("finds the words in the new lines, ignoring case and punctuation", () => {
+    expect(heardInNew("so two", "SOC 2", [{ t: 1, text: "We need So-Two." }], [])).toBe(true);
+    expect(heardInNew("", "SOC 2", [{ t: 1, text: "We need SOC 2." }], [])).toBe(true);
+    expect(heardInNew("dopamine", "dopamine", [{ t: 1, text: "nothing here" }], [{ t: 0, text: "dopamine" }])).toBe(false);
+  });
+  it("accepts a run that starts in the last context line and ends in the new text", () => {
+    expect(heardInNew("vector database", "vector database", [{ t: 1, text: "database, done." }], ctx)).toBe(true);
+    expect(heardInNew("a vector", "x", [{ t: 1, text: "database" }], ctx)).toBe(false); // all in the context
   });
 });
 
-describe("repairLabel", () => {
+describe("heardSpan", () => {
+  it("uses the last occurrence and returns its first word start and last word end", () => {
+    const lines = [
+      { t: 0, text: "cold start", words: [{ text: "cold", start: 1, end: 1.2 }, { text: "start", start: 1.3, end: 1.6 }] },
+      { t: 5, text: "a cold start", words: [{ text: "a", start: 5, end: 5.1 }, { text: "cold", start: 5.2, end: 5.4 }, { text: "start.", start: 5.5, end: 5.9 }] },
+    ];
+    expect(heardSpan(lines, "cold start", "cold start")).toEqual({ start: 5.2, end: 5.9 });
+    expect(heardSpan([{ t: 0, text: "no words" }], "x", "x")).toBeUndefined();
+  });
+});
+
+describe("variantOf", () => {
+  const shown = [
+    { term: "NSDR", full: "non-sleep deep rest" },
+    { term: "vector database", full: "vector database" },
+  ];
   it.each([
-    ["RAG", "RAG", "RAG"],
-    ["Vector\nDB", "vector database", "Vector\nDB"],
-    ["Vector\\nDB", "vector database", "Vector\nDB"],
-    ["  p95   latency ", "p95 latency", "p95\nlatency"],
-    ["feature\nflag", "feature flag", "Feature\nflag"],
-    ["", "eBPF", "eBPF"],
-    ["Quantization", "quantization", "Quantiz-\nation"],
-    ["", "burn multiple", "Burn\nmultiple"],
-    ["Canary release process", "canary release", "Canary\nrelease"],
-    ["SOC 2", "SOC 2", "SOC 2"],
-    ["", "retrieval augmented generation", "Retriev.\naugment."],
-    ["", "internationalization", "Interna-\ntionali."],
-    ["Penetration\ntest\nexercise", "pen test", "Pen test"],
-    ["Model\nsize", "quantization", "Quantiz-\nation"],
-    ["Node\nGroup", "Cluster", "Cluster"],
-    ["Auto\nScale", "Autoscaling", "Auto\nScale"],
-    ["Staging\nEnv", "staging environment", "Staging\nEnv"],
-    ["Pen\ntest\nnow", "pen test", "Pen test"],
-  ])("%j for %j -> %j", (proposed, term, expected) => {
-    const label = repairLabel(proposed, term);
-    expect(label).toBe(expected);
-    expect(isValidLabel(label)).toBe(true);
+    [{ term: "NSTR", full: "NSTR", variantOf: "" }, "NSDR"], // edit distance 1
+    [{ term: "non-sleep deep rest", full: "", variantOf: "" }, "NSDR"], // same full name
+    [{ term: "Non Sleep Deep Rest", full: "", variantOf: "" }, "NSDR"], // same full name / initials
+    [{ term: "Yoga Nidra", full: "yoga sleep", variantOf: "NSDR" }, "NSDR"], // the model says so
+    [{ term: "VDB", full: "vector database", variantOf: "" }, "vector database"],
+    [{ term: "NAD", full: "nicotinamide adenine dinucleotide", variantOf: "" }, null],
+    [{ term: "dopamine", full: "dopamine", variantOf: "" }, null],
+    [{ term: "CAC", full: "customer acquisition cost", variantOf: "" }, null],
+  ])("%j -> %j", (cand, expected) => {
+    expect(variantOf(cand, shown)).toBe(expected);
+  });
+  it("short acronyms one edit apart are variants, different ones are not", () => {
+    expect(variantOf({ term: "LTV", full: "", variantOf: "" }, [{ term: "CAC", full: "" }])).toBeNull();
+    expect(variantOf({ term: "SOC 3", full: "", variantOf: "" }, [{ term: "SOC 2", full: "" }])).toBeNull(); // has a space: not an acronym
+    expect(variantOf({ term: "EGG", full: "", variantOf: "" }, [{ term: "EEG", full: "" }])).toBe("EEG");
+  });
+  it("edit distance", () => {
+    expect(editDistance("nstr", "nsdr")).toBe(1);
+    expect(editDistance("rag", "rags")).toBe(1);
+    expect(editDistance("abc", "xyz")).toBe(3);
+  });
+});
+
+describe("spotter schema", () => {
+  it("asks for heard, full and variantOf, with the general categories and no label", () => {
+    const item = (SPOTTER_SCHEMA as any).properties.terms.items;
+    expect(item.required).toEqual(["term", "heard", "full", "variantOf", "category", "confidence", "reason"]);
+    expect(item.properties.category.enum).toEqual([...CATEGORIES]);
+    expect(item.properties.label).toBeUndefined();
   });
 });

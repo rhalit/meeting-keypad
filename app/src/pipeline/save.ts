@@ -10,7 +10,7 @@ import type { TranscriptLine } from "./transcriptBuffer.js";
 
 export const SAVE_SLOT = 7;
 export const SAVED_LABEL = "Saved ✓";
-export const SAVED_GREEN = "#2DA44E";
+export const SAVED_GREEN = "#3FB950";
 export const MAX_QUOTE_WORDS = 20;
 
 /** A saved idea after validation; `t` is the meeting second of the quoted line. */
@@ -286,7 +286,7 @@ export class SaveController {
 
   private confirm(idea: SavedIdea, duplicate: boolean): void {
     const { clock, keys, overlay } = this.o;
-    keys.setActionOverride(SAVE_SLOT, { label: SAVED_LABEL, bg: SAVED_GREEN, state: "shown" });
+    keys.setActionOverride(SAVE_SLOT, { label: SAVED_LABEL, color: SAVED_GREEN, state: "shown" });
     if (this.flashTimer !== null) clock.clearTimeout(this.flashTimer);
     this.flashTimer = clock.setTimeout(() => {
       this.flashTimer = null;

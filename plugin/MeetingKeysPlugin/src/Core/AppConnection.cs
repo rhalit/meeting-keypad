@@ -16,7 +16,7 @@ namespace Loupedeck.MeetingKeysPlugin
         private static readonly Uri AppUri = new("ws://127.0.0.1:8765");
         private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(2);
-        private const String PluginVersion = "0.1.0";
+        private const String PluginVersion = "0.2.0";
 
         private readonly KeyStore _store;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -208,7 +208,7 @@ namespace Loupedeck.MeetingKeysPlugin
                         slot,
                         GetString(k, "label") ?? "",
                         GetString(k, "sub"),
-                        GetString(k, "bg") ?? "#000000",
+                        GetString(k, "color"),
                         GetString(k, "state") ?? "shown"));
                 }
 

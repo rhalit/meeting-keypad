@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import type { AudioInput, AudioStatus } from "./audioCapture.js";
 import type { Clock } from "./clock.js";
-import { BYTES_PER_SECOND, type SttFactory, type SttSegment, type SttSession, type SttStatus } from "./stt.js";
+import type { TranscriptWord } from "./transcriptBuffer.js";
+import { BYTES_PER_SECOND, type SegmentReason, type SttFactory, type SttSegment, type SttSession, type SttStatus } from "./stt.js";
 
 /** A final utterance, same shape as a mock meeting line. `terms` stays empty: TermSpotter finds them. */
 export interface LiveLine {
@@ -12,7 +13,14 @@ export interface LiveLine {
   terms: string[];
   /** Meeting seconds of the last word (latency measurements). */
   end?: number;
+  /** Word timings in meeting seconds (when the term was spoken). */
+  words?: LiveWord[];
+  /** Why the line ended (length cut, endpointing, word gap, stop). */
+  reason?: SegmentReason;
 }
+
+/** Word timing in meeting seconds. */
+export type LiveWord = TranscriptWord;
 
 /** Not-yet-final text for the control panel only. */
 export interface LiveInterim {
@@ -108,6 +116,8 @@ export class LiveSource extends EventEmitter {
     stt.on("final", (seg: SttSegment) => {
       if (id !== this.session) return;
       const line: LiveLine = { t: this.meetingAt(seg.start), speaker: seg.speaker, text: seg.text, terms: [], end: this.meetingAt(seg.end) };
+      if (seg.words?.length) line.words = seg.words.map((w) => ({ text: w.text, start: this.meetingAtFine(w.start), end: this.meetingAtFine(w.end) }));
+      if (seg.reason) line.reason = seg.reason;
       this.emit("interim", null);
       this.emit("line", line);
     });
@@ -172,6 +182,11 @@ export class LiveSource extends EventEmitter {
   /** Session audio seconds → meeting seconds, 0.1 s resolution. */
   private meetingAt(a: number): number {
     return Math.round(Math.max(0, this.meetingAtRaw(a)) * 10) / 10;
+  }
+
+  /** Session audio seconds → meeting seconds, 0.01 s resolution (word timings). */
+  private meetingAtFine(a: number): number {
+    return Math.round(Math.max(0, this.meetingAtRaw(a)) * 100) / 100;
   }
 
   private emitState(): void {

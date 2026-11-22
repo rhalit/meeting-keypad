@@ -5,14 +5,16 @@ import type { Clock, TimerHandle } from "./clock.js";
 import { LlmError, toLlmError, withTimeout, type JsonSpec, type LlmClient } from "./llm.js";
 import { describeListener, type ListenerProfile } from "./mockData.js";
 import { SPOTTER_SCHEMA, spotterMessages } from "./prompts.js";
-import { isCategory, repairLabel, type Category } from "./protocol.js";
+import { findRun, plain } from "./example.js";
+import { isCategory, type Category } from "./protocol.js";
 import { normalizeTerm, type TermCandidate } from "./terms.js";
 import type { TranscriptLine } from "./transcriptBuffer.js";
 
 export interface RawSpotted {
   term: string;
   heard: string;
-  label: string;
+  full: string;
+  variantOf: string;
   category: string;
   confidence: number;
   reason: string;
@@ -27,6 +29,10 @@ export interface SpotInfo {
   confidence: number;
   reason: string;
   heard: string;
+  /** Full name / expansion from the spotter ("" if none). */
+  full: string;
+  /** Meeting seconds at which the last heard word ended (word timestamps), if known. */
+  spokenAt?: number;
 }
 
 export interface SpotterStatus {
@@ -68,7 +74,8 @@ export const SPOTTER_SPEC: JsonSpec<{ terms: RawSpotted[] }> = {
       out.push({
         term: t.term,
         heard: typeof t.heard === "string" ? t.heard : "",
-        label: typeof t.label === "string" ? t.label : "",
+        full: typeof t.full === "string" ? t.full : "",
+        variantOf: typeof t.variantOf === "string" ? t.variantOf : "",
         category: typeof t.category === "string" ? t.category : "",
         confidence: t.confidence,
         reason: typeof t.reason === "string" ? t.reason : "",
@@ -77,13 +84,6 @@ export const SPOTTER_SPEC: JsonSpec<{ terms: RawSpotted[] }> = {
     return { terms: out };
   },
 };
-
-/** Lowercase letters and digits only, words separated by one space. */
-const plain = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 
 /** The line a term was heard in: `heard` verbatim, else most words of the term, else the last line. */
 export function findLine(lines: TranscriptLine[], heard: string, term: string): TranscriptLine {
@@ -109,14 +109,109 @@ export function findLine(lines: TranscriptLine[], heard: string, term: string): 
   return best;
 }
 
+const words = (s: string) => plain(s).split(" ").filter(Boolean);
+
+/**
+ * True if the heard words (else the term's) occur in the NEW lines. A run that starts in the last
+ * context line and ends in the new lines also counts (a term cut by a line boundary).
+ */
+export function heardInNew(heard: string, term: string, newLines: TranscriptLine[], context: TranscriptLine[]): boolean {
+  const needle = words(heard).length ? words(heard) : words(term);
+  if (needle.length === 0) return false;
+  const fresh = newLines.flatMap((l) => words(l.text));
+  if (findRun(fresh, needle) >= 0) return true;
+  const last = context.length ? words(context[context.length - 1].text) : [];
+  const joined = [...last, ...fresh];
+  for (let at = findRun(joined, needle); at >= 0; at = findRun(joined, needle, at + 1)) {
+    if (at + needle.length > last.length) return true; // at least one word in the new text
+  }
+  return false;
+}
+
+/**
+ * Meeting seconds at which the heard words (else the term's) were spoken: the end of the last word of
+ * their last occurrence in the lines' word timings. Undefined without word timings.
+ */
+export function heardSpan(lines: TranscriptLine[], heard: string, term: string): { start: number; end: number } | undefined {
+  const timed = lines.flatMap((l) => (l.words ?? []).flatMap((w) => words(w.text).map((p) => ({ p, start: w.start, end: w.end }))));
+  if (timed.length === 0) return undefined;
+  const flat = timed.map((x) => x.p);
+  for (const needle of [words(heard), words(term)]) {
+    let found = -1;
+    for (let at = findRun(flat, needle); at >= 0; at = findRun(flat, needle, at + 1)) found = at;
+    if (found >= 0) return { start: timed[found].start, end: timed[found + needle.length - 1].end };
+  }
+  return undefined;
+}
+
+const isAcronym = (t: string) => {
+  const c = t.replace(/[\s\-.]/g, "");
+  return c.length >= 2 && c.length <= 6 && !/\s/.test(t.trim()) && (c.match(/[A-Z0-9]/g)?.length ?? 0) >= Math.ceil(c.length * 0.6);
+};
+
+/** Levenshtein distance, early exit above 1 is not needed for these short strings. */
+export function editDistance(a: string, b: string): number {
+  const d: number[] = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0];
+    d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return d[b.length];
+}
+
+/** First letters of a multi-word phrase ("non-sleep deep rest" -> "nsdr"); "" for one word. */
+const initials = (s: string) => {
+  const w = words(s);
+  return w.length >= 2 ? w.map((x) => x[0]).join("") : "";
+};
+
+export interface ShownTerm {
+  term: string;
+  full: string;
+}
+
+/**
+ * The already-shown term that `cand` is a variant of, or null: same full name (either way round),
+ * an acronym of its words, a short acronym one edit away (NSTR vs NSDR), or the model's variantOf.
+ */
+export function variantOf(cand: { term: string; full: string; variantOf: string }, shown: ShownTerm[]): string | null {
+  const nt = normalizeTerm(cand.term);
+  const nf = normalizeTerm(cand.full);
+  const nv = normalizeTerm(cand.variantOf);
+  const compact = (s: string) => plain(s).replace(/ /g, "");
+  for (const s of shown) {
+    const st = normalizeTerm(s.term);
+    const sf = normalizeTerm(s.full);
+    if (nv && (nv === st || nv === sf)) return s.term;
+    if (nf && sf && nf === sf) return s.term;
+    if (nf && nf === st) return s.term;
+    if (sf && sf === nt) return s.term;
+    const ci = initials(cand.term) || initials(cand.full);
+    if (ci && isAcronym(s.term) && ci === compact(s.term)) return s.term;
+    const si = initials(s.term) || initials(s.full);
+    if (si && isAcronym(cand.term) && si === compact(cand.term)) return s.term;
+    if (isAcronym(cand.term) && isAcronym(s.term)) {
+      const a = compact(cand.term);
+      const b = compact(s.term);
+      if (a !== b && Math.min(a.length, b.length) >= 3 && editDistance(a, b) <= 1) return s.term;
+    }
+  }
+  return null;
+}
+
 /**
  * Sends new final lines to the spotter model and emits `term` (TermCandidate, SpotInfo) for each
  * accepted term, plus `status` (SpotterStatus) on changes.
  *
  * - At most one call in flight and one call per `minIntervalMs` (start to start). A call only
  *   happens when new lines arrived, so silence costs nothing.
- * - Keeps terms with confidence >= 0.7, not spotted before in this meeting, at most 2 per call;
- *   labels are repaired to 2 x 8 characters.
+ * - Keeps terms with confidence >= 0.7 whose heard words are in the NEW lines (checked in code), not
+ *   spotted before in this meeting and not a variant / mishearing of one (variantOf()), at most 2 per call.
  * - On a rate limit it waits max(retry-after, 8 s, 16 s, 32 s ... 60 s) and then sends only the
  *   latest lines (6 lines / 45 s): skipped cycles are dropped, never queued.
  * - Auth / config / unknown model errors stop it until reset().
@@ -125,7 +220,7 @@ export class TermSpotter extends EventEmitter {
   private readonly o: Required<TermSpotterOptions>;
   private pending: TranscriptLine[] = [];
   private sent: TranscriptLine[] = [];
-  private spotted = new Map<string, string>();
+  private spotted = new Map<string, ShownTerm>();
   private inFlight: { ac: AbortController; done: Promise<void> } | null = null;
   private lastStartAt: number | null = null;
   private timer: TimerHandle | null = null;
@@ -162,11 +257,16 @@ export class TermSpotter extends EventEmitter {
 
   /** Every term accepted in this meeting (canonical spelling). */
   spottedTerms(): string[] {
-    return [...this.spotted.values()];
+    return [...this.spotted.values()].map((s) => s.term);
   }
 
   status(): SpotterStatus {
     return this.st;
+  }
+
+  /** True when nothing is waiting: no call in flight, no timer, no unsent lines (replay). */
+  isIdle(): boolean {
+    return !this.inFlight && this.timer === null && (this.pending.length === 0 || this.stopped !== null);
   }
 
   /** Resolves once no call is in flight (tests, eval). */
@@ -288,7 +388,7 @@ export class TermSpotter extends EventEmitter {
     this.inFlight = entry;
   }
 
-  /** Filters, repairs and emits. Returns how many terms were accepted. */
+  /** Filters and emits. Returns how many terms were accepted. */
   private accept(raw: RawSpotted[], batch: TranscriptLine[], context: TranscriptLine[]): number {
     const { log } = this.o;
     const name = normalizeTerm(this.o.listener.name);
@@ -297,13 +397,17 @@ export class TermSpotter extends EventEmitter {
     for (const r of raw) {
       const term = r.term.replace(/\s+/g, " ").trim();
       const key = normalizeTerm(term);
-      const words = term.split(" ").length;
+      const nWords = term.split(" ").length;
+      const shown = [...this.spotted.values(), ...ok.map((o) => ({ term: o.term, full: o.full }))];
       let why = "";
-      if (!key || term.length > 40 || words > 4) why = "not a short term";
+      let variant: string | null = null;
+      if (!key || term.length > 40 || nWords > 4) why = "not a short term";
       else if (r.confidence < this.o.minConfidence) why = `confidence ${r.confidence}`;
       else if (this.spotted.has(key) || seen.has(key)) why = "already shown";
       else if (key === name) why = "listener's name";
       else if (!isCategory(r.category)) why = `category "${r.category}"`;
+      else if (!heardInNew(r.heard, term, batch, context)) why = `not heard in new lines ("${r.heard}")`;
+      else if ((variant = variantOf({ term, full: r.full, variantOf: r.variantOf }, shown))) why = `variant of "${variant}"`;
       if (why) {
         log(`spotter: skip "${term}" (${why})`);
         continue;
@@ -315,20 +419,23 @@ export class TermSpotter extends EventEmitter {
     for (const r of ok.slice(this.o.maxPerCall)) log(`spotter: skip "${r.term}" (more than ${this.o.maxPerCall} in one call)`);
     const accepted = ok.slice(0, this.o.maxPerCall);
     for (const r of accepted) {
-      this.spotted.set(r.key, r.term);
+      this.spotted.set(r.key, { term: r.term, full: r.full.trim() });
       this.stats.terms++;
-      const candidate: TermCandidate = { term: r.term, label: repairLabel(r.label, r.term), category: r.category, source: "live" };
+      const candidate: TermCandidate = { term: r.term, category: r.category, source: "live" };
       const line = findLine(batch, r.heard, r.term);
       const before = [...context, ...batch];
       const idx = before.indexOf(line);
+      const span = heardSpan([...context.slice(-1), ...batch], r.heard, r.term);
       const info: SpotInfo = {
         line,
         context: before.slice(Math.max(0, idx - 2), idx),
         confidence: r.confidence,
         reason: r.reason,
         heard: r.heard,
+        full: r.full.trim(),
+        spokenAt: span?.end,
       };
-      log(`spotter: "${r.term}" (${r.category}, ${r.confidence}, heard "${r.heard}": ${r.reason})`);
+      log(`spotter: "${r.term}" (${r.category}, ${r.confidence}, heard "${r.heard}"${r.full ? `, full "${r.full}"` : ""}: ${r.reason})`);
       this.emit("term", candidate, info);
     }
     return accepted.length;

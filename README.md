@@ -17,3 +17,15 @@ architecture, commands and rules, and `protocol/messages.md` for the plugin ↔ 
    macOS credits the permission to Electron, not to Terminal, so allowing only Terminal gives silence in Live mode.
    (`npm run smoke:live` runs in plain Node, so for that the terminal app needs the permission.)
 5. **Run:** `cd app && npm run dev`, switch the panel to Live and press Start listening.
+
+## Recording a fixture (offline tuning)
+
+To tune segmentation and the spotter without spending LLM budget, record a real session once and replay it.
+
+1. Give your **terminal app** the system audio permission (same place as step 4 above; the recorder runs in plain Node).
+2. `cd app && npm run record:live -- --tag podcast --seconds 180`, then start playing the audio (a YouTube podcast,
+   a call) on this Mac. It prints the transcript as it arrives and writes `tools/recordings/podcast.jsonl`
+   (raw Deepgram messages; gitignored, as it holds third-party speech). Ctrl+C stops early.
+3. `npm run replay:live -- ../tools/recordings/podcast.jsonl --terms "NSDR=Health, dopamine=Science"` runs it through
+   the full live pipeline with a free keyword spotter and prints line lengths and the speech→key delay per term.
+   `--spotter real` uses `LLM_SPOTTER_MODEL` instead (real time, costs budget).

@@ -12,6 +12,16 @@ export const SAMPLE_RATE = 16000;
 /** Int16 mono at 16 kHz. */
 export const BYTES_PER_SECOND = SAMPLE_RATE * 2;
 
+/** One recognised word with its timing (session audio seconds). */
+export interface SttWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** Why a final segment ended: a long line cut at a segment boundary, endpointing, a word gap, or stop. */
+export type SegmentReason = "length" | "speech_final" | "utterance_end" | "flush";
+
 /** One piece of recognised speech. */
 export interface SttSegment {
   text: string;
@@ -20,6 +30,10 @@ export interface SttSegment {
   /** Session audio seconds. */
   start: number;
   end: number;
+  /** Word timings (finals; interims may have them too). */
+  words?: SttWord[];
+  /** Finals only. */
+  reason?: SegmentReason;
 }
 
 export type SttState = "idle" | "connecting" | "open" | "reconnecting" | "closed" | "error";
@@ -181,46 +195,77 @@ interface Piece {
   start: number;
   end: number;
   speakers: number[];
+  words: SttWord[];
 }
+
+export interface AssemblerOptions {
+  /** End a line at the next is_final boundary once it has this many words ... */
+  maxLineWords?: number;
+  /** ... or this many seconds of speech. */
+  maxLineS?: number;
+}
+
+export const MAX_LINE_WORDS = 12;
+export const MAX_LINE_S = 6;
 
 /**
  * Turns Deepgram Results / UtteranceEnd messages into utterances. `is_final` pieces collect
- * until `speech_final` (endpointing) or `UtteranceEnd` (gap in words), then become one final
- * segment. Interim = collected pieces + the current not-yet-final text.
+ * until `speech_final` (endpointing), `UtteranceEnd` (gap in words), or — so a monologue without
+ * pauses does not hold a term back — the first is_final boundary at which the line has >= 12 words
+ * or >= 6 s of speech. A piece is never split. Interim = collected pieces + the current not-yet-final text.
  * `offset` = session audio seconds at which this connection's audio began.
  */
 export class DeepgramAssembler {
   private pieces: Piece[] = [];
+  private readonly maxWords: number;
+  private readonly maxS: number;
+
+  constructor(opts: AssemblerOptions = {}) {
+    this.maxWords = opts.maxLineWords ?? MAX_LINE_WORDS;
+    this.maxS = opts.maxLineS ?? MAX_LINE_S;
+  }
 
   results(msg: DgResults, offset: number): { interim?: SttSegment; final?: SttSegment } {
     const alt = msg.channel?.alternatives?.[0];
     const text = (alt?.transcript ?? "").trim();
-    const words = alt?.words ?? [];
-    const start = offset + (words[0]?.start ?? msg.start);
-    const end = offset + (words.length ? (words[words.length - 1].end ?? msg.start + msg.duration) : msg.start + msg.duration);
-    const speakers = words.map((w) => w.speaker).filter((s): s is number => typeof s === "number");
+    const raw = alt?.words ?? [];
+    const start = offset + (raw[0]?.start ?? msg.start);
+    const end = offset + (raw.length ? (raw[raw.length - 1].end ?? msg.start + msg.duration) : msg.start + msg.duration);
+    const speakers = raw.map((w) => w.speaker).filter((s): s is number => typeof s === "number");
+    const words: SttWord[] = raw
+      .filter((w) => typeof w.start === "number" && typeof w.end === "number")
+      .map((w) => ({ text: w.punctuated_word ?? w.word ?? "", start: offset + w.start!, end: offset + w.end! }));
+    const piece: Piece = { text, start, end, speakers, words };
     if (!msg.is_final) {
       if (!text) return {};
-      return { interim: this.join([...this.pieces, { text, start, end, speakers }]) };
+      return { interim: this.join([...this.pieces, piece]) };
     }
-    if (text) this.pieces.push({ text, start, end, speakers });
+    if (text) this.pieces.push(piece);
     if (msg.speech_final) {
-      const final = this.flush();
+      const final = this.flush("speech_final");
       return final ? { final } : {};
     }
+    if (this.pieces.length && this.isLong()) return { final: this.flush("length")! };
     return this.pieces.length ? { interim: this.join(this.pieces) } : {};
   }
 
   utteranceEnd(): SttSegment | null {
-    return this.flush();
+    return this.flush("utterance_end");
   }
 
   /** Whatever is collected, as a final segment (stop / disconnect). */
-  flush(): SttSegment | null {
+  flush(reason: SegmentReason = "flush"): SttSegment | null {
     if (this.pieces.length === 0) return null;
-    const seg = this.join(this.pieces);
+    const seg = { ...this.join(this.pieces), reason };
     this.pieces = [];
     return seg;
+  }
+
+  private isLong(): boolean {
+    const words = this.pieces.reduce((n, p) => n + (p.words.length || p.text.split(/\s+/).filter(Boolean).length), 0);
+    const first = this.pieces[0];
+    const last = this.pieces[this.pieces.length - 1];
+    return words >= this.maxWords || last.end - first.start >= this.maxS;
   }
 
   private join(pieces: Piece[]): SttSegment {
@@ -230,7 +275,47 @@ export class DeepgramAssembler {
       speaker: majoritySpeaker(speakers),
       start: pieces[0].start,
       end: pieces[pieces.length - 1].end,
+      words: pieces.flatMap((p) => p.words),
     };
+  }
+}
+
+/** One raw message from the Deepgram socket, as the recorder stores it. */
+export interface RawSttEntry {
+  /** Clock ms since start(). */
+  at: number;
+  /** Session audio seconds at which this connection's audio began (null before the first audio). */
+  offset: number | null;
+  /** The message text, or a connect marker. */
+  msg?: string;
+  type?: "connect";
+}
+
+/**
+ * Handles one Deepgram text message: Results / UtteranceEnd go through the assembler, errors are
+ * logged. Shared by the live session and the replay, so both segment the same way.
+ */
+export function handleDeepgramMessage(
+  assembler: DeepgramAssembler,
+  raw: string,
+  offset: number,
+  out: { final(seg: SttSegment): void; interim(seg: SttSegment): void; log(msg: string): void },
+): void {
+  let msg: { type?: string; [k: string]: unknown };
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (msg.type === "Results") {
+    const r = assembler.results(msg as unknown as DgResults, offset);
+    if (r.final) out.final(r.final);
+    else if (r.interim) out.interim(r.interim);
+  } else if (msg.type === "UtteranceEnd") {
+    const seg = assembler.utteranceEnd();
+    if (seg) out.final(seg);
+  } else if (msg.type === "Error" || msg.type === "error") {
+    out.log(`deepgram: error message: ${JSON.stringify(msg).slice(0, 300)}`);
   }
 }
 
@@ -255,6 +340,10 @@ export interface DeepgramDeps {
   keepAliveMs?: number;
   /** How long stop() waits for the last results. */
   closeWaitMs?: number;
+  /** Every text message from Deepgram and every (re)connect (the recorder). */
+  onRaw?: (entry: RawSttEntry) => void;
+  /** Line length limits (default 12 words / 6 s). */
+  segmentation?: AssemblerOptions;
 }
 
 interface Chunk {
@@ -280,7 +369,8 @@ export class DeepgramStt extends EventEmitter implements SttSession {
   private connOffset: number | null = null;
   private queue: Chunk[] = [];
   private lastAudioAt = 0;
-  private assembler = new DeepgramAssembler();
+  private assembler: DeepgramAssembler;
+  private startedAt = 0;
   private retryTimer: TimerHandle | null = null;
   private keepAliveTimer: TimerHandle | null = null;
   private closed: (() => void) | null = null;
@@ -295,6 +385,7 @@ export class DeepgramStt extends EventEmitter implements SttSession {
     this.bufferS = deps.bufferS ?? 10;
     this.keepAliveMs = deps.keepAliveMs ?? 4000;
     this.closeWaitMs = deps.closeWaitMs ?? 2500;
+    this.assembler = new DeepgramAssembler(deps.segmentation);
   }
 
   describe(): string {
@@ -309,6 +400,7 @@ export class DeepgramStt extends EventEmitter implements SttSession {
     if (this.wanted) return;
     this.wanted = true;
     this.fatal = false;
+    this.startedAt = this.deps.clock.now();
     const terms = this.opts.keyterms.length ? `, ${this.opts.keyterms.length} keyterms` : "";
     this.deps.log(`deepgram: ${this.describe()}${this.cfg.diarize ? ", diarize" : ""}${terms}, endpointing ${this.cfg.endpointingMs} ms`);
     this.connect();
@@ -384,6 +476,7 @@ export class DeepgramStt extends EventEmitter implements SttSession {
     ws.on("open", () => {
       if (this.ws !== ws) return;
       this.attempt = 0;
+      this.deps.onRaw?.({ at: this.deps.clock.now() - this.startedAt, offset: this.connOffset, type: "connect" });
       this.setStatus({ state: "open", text: `Speech-to-text: Deepgram ${this.describe()}` });
       const queued = this.queue;
       this.queue = [];
@@ -422,23 +515,12 @@ export class DeepgramStt extends EventEmitter implements SttSession {
   }
 
   private onMessage(raw: string): void {
-    let msg: { type?: string; [k: string]: unknown };
-    try {
-      msg = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    const offset = this.connOffset ?? 0;
-    if (msg.type === "Results") {
-      const r = this.assembler.results(msg as unknown as DgResults, offset);
-      if (r.final) this.emit("final", r.final);
-      else if (r.interim) this.emit("interim", r.interim);
-    } else if (msg.type === "UtteranceEnd") {
-      const seg = this.assembler.utteranceEnd();
-      if (seg) this.emit("final", seg);
-    } else if (msg.type === "Error" || msg.type === "error") {
-      this.deps.log(`deepgram: error message: ${JSON.stringify(msg).slice(0, 300)}`);
-    }
+    this.deps.onRaw?.({ at: this.deps.clock.now() - this.startedAt, offset: this.connOffset, msg: raw });
+    handleDeepgramMessage(this.assembler, raw, this.connOffset ?? 0, {
+      final: (seg) => this.emit("final", seg),
+      interim: (seg) => this.emit("interim", seg),
+      log: this.deps.log,
+    });
   }
 
   private emitFlush(): void {

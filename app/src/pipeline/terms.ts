@@ -5,10 +5,8 @@ import type { Category } from "./protocol.js";
  * the mock meeting now (source "mock"), the live term spotter in Phase 3 (source "live").
  */
 export interface TermCandidate {
-  /** Full term as spoken, e.g. "vector database". Only the overlay shows it in full. */
+  /** Term as spoken, canonical spelling, e.g. "vector database". The key shows displayTerm(term). */
   term: string;
-  /** Key label, max 2 lines x 8 chars, "\n" as the break. */
-  label: string;
   category: Category;
   source: "mock" | "live";
 }

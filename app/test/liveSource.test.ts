@@ -54,6 +54,29 @@ describe("LiveSource", () => {
     expect((live.state() as LiveState).listening).toBe(true);
   });
 
+  it("finals carry their word timings in meeting seconds and why they ended", () => {
+    clock.advance(10_000);
+    live.start([]);
+    speak(4);
+    stt.last().emitFinal({
+      text: "we use RAG",
+      start: 1,
+      end: 2.2,
+      reason: "length",
+      words: [
+        { text: "we", start: 1, end: 1.2 },
+        { text: "use", start: 1.3, end: 1.6 },
+        { text: "RAG", start: 1.7, end: 2.2 },
+      ],
+    });
+    expect(lines[0].words).toEqual([
+      { text: "we", start: 1, end: 1.2 },
+      { text: "use", start: 1.3, end: 1.6 },
+      { text: "RAG", start: 1.7, end: 2.2 },
+    ]);
+    expect(lines[0].reason).toBe("length");
+  });
+
   it("finals become lines {t, speaker?, text, terms: []}; interims only go to `interim`", () => {
     live.start([]);
     speak(5);

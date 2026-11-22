@@ -6,6 +6,7 @@ import {
   SLOT_COUNT,
   TERM_SLOTS,
   actionKey,
+  displayTerm,
   emptyKey,
   isValidSlot,
   type KeyState,
@@ -17,17 +18,17 @@ export interface SlotManagerOptions {
   clock: Clock;
   /** "new" -> "shown" after this long. */
   newMs?: number;
-  /** An unopened term must have been on screen this long before it can be replaced. */
-  minOnScreenMs?: number;
   /** At most this many placements per window; extras queue. */
   maxNewPerWindow?: number;
   windowMs?: number;
+  /** A press this soon after a shift goes to the term that was on that key before the shift. */
+  pressGraceMs?: number;
 }
 
 /** Temporary look of an action key (slots 6-8), merged over its static label. */
 export interface ActionOverride {
   label?: string;
-  bg?: string;
+  color?: string;
   state?: SlotState;
 }
 
@@ -51,44 +52,53 @@ interface Placed {
 }
 
 /**
- * Decides which term is on which of the 6 term keys (slots 0-5). Slots 6-8 keep their static labels.
+ * Decides which term is on which of the 6 term keys (slots 0-5, read left to right, top to bottom).
+ * Slots 6-8 keep their static labels.
  *
- * - A new term fills the lowest empty slot. When all are full it replaces a term already opened ("seen",
- *   the one placed earliest), otherwise the longest-shown unopened term once that has had >= 20 s.
- * - A term never moves to another slot. Duplicates (case, plurals) are merged.
- * - Terms that were opened never come back. At most 2 placements per 10 s; extras queue (FIFO).
- * - Emits `change` with only the slots that changed, as complete protocol KeyStates, and
- *   `placed` ({ slot, candidate }) for every term that lands on a key (after its `change`).
+ * FIFO conveyor:
+ * - A new term always appears on slot 0; every other term moves one slot forward; the term on
+ *   slot 5 leaves. Opened ("seen") terms are not removed early. A term's state (new / shown / seen)
+ *   and its 3 s "new" timer travel with it.
+ * - At most 2 placements per 10 s; extras queue (FIFO). Duplicates (case, plurals) are merged, and a
+ *   term that was already shown in this meeting is not shown again.
+ * - A press within 500 ms after a shift goes to the term that was on that key before the shift
+ *   (the user aimed at what they saw); if that key was empty, the press goes to the term on it now.
+ * - Emits `change` with only the slots whose KeyState changed, as complete protocol KeyStates, and
+ *   `placed` ({ slot, candidate }) for every term that lands on a key (after its `change`; slot 0,
+ *   or 1 for the first of two terms placed at the same moment).
  */
 export class SlotManager extends EventEmitter implements ActionKeys {
   private readonly clock: Clock;
   private readonly newMs: number;
-  private readonly minOnScreenMs: number;
   private readonly maxNewPerWindow: number;
   private readonly windowMs: number;
+  private readonly pressGraceMs: number;
 
   private slots: (Placed | null)[] = new Array(TERM_SLOTS).fill(null);
   private queue: { key: string; candidate: TermCandidate }[] = [];
-  private opened = new Set<string>();
+  /** Every term that reached a key in this meeting (on screen or gone). */
+  private shown = new Set<string>();
   private placements: number[] = [];
   private pumpTimer: TimerHandle | null = null;
   private overrides = new Map<number, ActionOverride>();
+  /** Layout just before the last shift, and when it happened. */
+  private beforeShift: (Placed | null)[] | null = null;
+  private shiftAt = -Infinity;
 
   constructor(opts: SlotManagerOptions) {
     super();
     this.clock = opts.clock;
     this.newMs = opts.newMs ?? 3000;
-    this.minOnScreenMs = opts.minOnScreenMs ?? 20_000;
     this.maxNewPerWindow = opts.maxNewPerWindow ?? 2;
     this.windowMs = opts.windowMs ?? 10_000;
+    this.pressGraceMs = opts.pressGraceMs ?? 500;
   }
 
-  /** Offer a spotted term. Ignored if it is on screen, queued, or was opened before. */
+  /** Offer a spotted term. Ignored if it is queued or was already shown in this meeting. */
   add(candidate: TermCandidate): void {
     const key = normalizeTerm(candidate.term);
     if (!key) return;
-    if (this.opened.has(key)) return;
-    if (this.slots.some((p) => p?.key === key)) return;
+    if (this.shown.has(key)) return;
     if (this.queue.some((q) => q.key === key)) return;
     this.queue.push({ key, candidate });
     this.pump();
@@ -97,15 +107,15 @@ export class SlotManager extends EventEmitter implements ActionKeys {
   press(slot: number): PressResult {
     if (!isValidSlot(slot)) return { kind: "invalid", slot };
     if (slot >= TERM_SLOTS) return { kind: "action", slot, action: ACTION_KEYS[slot].name };
-    const p = this.slots[slot];
+    const inGrace = this.beforeShift !== null && this.clock.now() - this.shiftAt < this.pressGraceMs;
+    // In the grace period the user aimed at what was there before the shift; an empty key had nothing to aim at.
+    const p = (inGrace ? this.beforeShift![slot] : null) ?? this.slots[slot];
     if (!p) return { kind: "empty", slot };
-    this.opened.add(p.key);
     if (!p.seen) {
+      const before = this.states();
       p.seen = true;
       this.cancelNewTimer(p);
-      this.emitChange([slot]);
-      // A seen term is replaceable right away, so a queued term may now fit.
-      this.pump();
+      this.emitDiff(before);
     }
     return { kind: "term", slot, term: p.candidate.term };
   }
@@ -115,7 +125,7 @@ export class SlotManager extends EventEmitter implements ActionKeys {
     if (!isValidSlot(slot) || slot < TERM_SLOTS) return;
     if (override) this.overrides.set(slot, { ...override });
     else if (!this.overrides.delete(slot)) return;
-    this.emitChange([slot]);
+    this.emit("change", [this.keyState(slot)]);
   }
 
   /** All 9 slots in protocol format. */
@@ -139,7 +149,7 @@ export class SlotManager extends EventEmitter implements ActionKeys {
     return this.queue.map((q) => q.candidate.term);
   }
 
-  /** Back to the initial state (empty term slots, nothing queued or opened, action keys restored). */
+  /** Back to the initial state (empty term slots, nothing queued or shown, action keys restored). */
   reset(): void {
     const changed: number[] = [...this.overrides.keys()];
     this.overrides.clear();
@@ -150,10 +160,12 @@ export class SlotManager extends EventEmitter implements ActionKeys {
     });
     this.slots = new Array(TERM_SLOTS).fill(null);
     this.queue = [];
-    this.opened.clear();
+    this.shown.clear();
     this.placements = [];
+    this.beforeShift = null;
+    this.shiftAt = -Infinity;
     this.cancelPumpTimer();
-    if (changed.length) this.emitChange(changed);
+    if (changed.length) this.emit("change", [...new Set(changed)].sort((a, b) => a - b).map((s) => this.keyState(s)));
   }
 
   dispose(): void {
@@ -165,87 +177,76 @@ export class SlotManager extends EventEmitter implements ActionKeys {
 
   private pump(): void {
     this.cancelPumpTimer();
-    const changed: number[] = [];
-    const placed: { slot: number; candidate: TermCandidate }[] = [];
+    const before = this.states();
+    const layout = [...this.slots];
+    const placed: Placed[] = [];
     while (this.queue.length > 0) {
       const now = this.clock.now();
       this.placements = this.placements.filter((t) => t > now - this.windowMs);
       if (this.placements.length >= this.maxNewPerWindow) break;
-      const slot = this.pickSlot(now);
-      if (slot === null) break;
       const { key, candidate } = this.queue.shift()!;
-      this.place(slot, key, candidate, now);
-      changed.push(slot);
-      placed.push({ slot, candidate });
+      placed.push(this.insert(key, candidate, now));
     }
-    if (changed.length) this.emitChange(changed);
-    for (const p of placed) this.emit("placed", p);
+    if (placed.length) {
+      this.beforeShift = layout;
+      this.shiftAt = this.clock.now();
+      this.emitDiff(before);
+    }
+    // Two terms placed together: the first one is already on slot 1.
+    for (const p of placed) this.emit("placed", { slot: this.slots.indexOf(p), candidate: p.candidate });
     if (this.queue.length > 0) this.scheduleRetry();
   }
 
-  /** Lowest empty slot, else the earliest-placed seen term, else the longest-shown term with >= 20 s. */
-  private pickSlot(now: number): number | null {
-    const empty = this.slots.findIndex((p) => p === null);
-    if (empty !== -1) return empty;
-    const oldest = (pred: (p: Placed) => boolean): number | null => {
-      let best: number | null = null;
-      this.slots.forEach((p, i) => {
-        if (p && pred(p) && (best === null || p.placedAt < this.slots[best]!.placedAt)) best = i;
-      });
-      return best;
-    };
-    return oldest((p) => p.seen) ?? oldest((p) => !p.seen && now - p.placedAt >= this.minOnScreenMs);
-  }
-
-  private place(slot: number, key: string, candidate: TermCandidate, now: number): void {
-    const prev = this.slots[slot];
-    if (prev) this.cancelNewTimer(prev);
+  /** New term on slot 0; the others move one slot forward; slot 5's term leaves. */
+  private insert(key: string, candidate: TermCandidate, now: number): Placed {
+    const leaving = this.slots[TERM_SLOTS - 1];
+    if (leaving) this.cancelNewTimer(leaving);
     const placed: Placed = { key, candidate, placedAt: now, seen: false, newTimer: null };
     placed.newTimer = this.clock.setTimeout(() => {
       placed.newTimer = null;
-      if (this.slots[slot] === placed && !placed.seen) this.emitChange([slot]);
+      const slot = this.slots.indexOf(placed);
+      if (slot !== -1 && !placed.seen) this.emit("change", [this.keyState(slot)]);
     }, this.newMs);
-    this.slots[slot] = placed;
+    this.slots = [placed, ...this.slots.slice(0, TERM_SLOTS - 1)];
+    this.shown.add(key);
     this.placements.push(now);
+    return placed;
   }
 
-  /** One timer at the earliest moment the rate window or the 20 s rule can unblock the queue. */
+  /** One timer at the moment the rate window lets the next queued term in. */
   private scheduleRetry(): void {
     const now = this.clock.now();
-    const times: number[] = [];
-    if (this.placements.length >= this.maxNewPerWindow) {
-      const sorted = [...this.placements].sort((a, b) => a - b);
-      times.push(sorted[this.placements.length - this.maxNewPerWindow] + this.windowMs);
-    }
-    if (this.slots.every((p) => p !== null) && !this.slots.some((p) => p!.seen)) {
-      times.push(Math.min(...this.slots.map((p) => p!.placedAt)) + this.minOnScreenMs);
-    }
-    const at = Math.max(now, ...times);
+    const sorted = [...this.placements].sort((a, b) => a - b);
+    const at = sorted.length >= this.maxNewPerWindow ? sorted[sorted.length - this.maxNewPerWindow] + this.windowMs : now;
     this.pumpTimer = this.clock.setTimeout(() => {
       this.pumpTimer = null;
       this.pump();
-    }, at - now);
+    }, Math.max(0, at - now));
   }
 
   private keyState(slot: number): KeyState {
     if (slot >= TERM_SLOTS) return { ...actionKey(slot), ...this.overrides.get(slot) };
     const p = this.slots[slot];
     if (!p) return emptyKey(slot);
-    const { label, category } = p.candidate;
+    const { term, category } = p.candidate;
     return {
       slot,
-      label,
+      label: displayTerm(term),
       sub: category,
-      bg: CATEGORY_COLORS[category],
+      color: CATEGORY_COLORS[category],
       state: p.seen ? "seen" : p.newTimer !== null ? "new" : "shown",
     };
   }
 
-  private emitChange(slots: number[]): void {
-    this.emit(
-      "change",
-      [...new Set(slots)].map((s) => this.keyState(s)),
-    );
+  /** The 6 term-key states, for diffing. */
+  private states(): KeyState[] {
+    return this.slots.map((_, i) => this.keyState(i));
+  }
+
+  private emitDiff(before: KeyState[]): void {
+    const after = this.states();
+    const changed = after.filter((k, i) => JSON.stringify(k) !== JSON.stringify(before[i]));
+    if (changed.length) this.emit("change", changed);
   }
 
   private cancelNewTimer(p: Placed): void {

@@ -124,7 +124,7 @@ describe("OverlayController", () => {
 
   it("works with the real SlotManager, including a seen key", () => {
     const slots = new SlotManager({ clock });
-    slots.add({ term: "RAG", label: "RAG", category: "AI", source: "mock" });
+    slots.add({ term: "RAG", category: "Tech", source: "mock" });
     expect(overlay.press(slots.press(0))).toBe("shown");
     expect(slots.getAll()[0].state).toBe("seen");
     expect(overlay.press(slots.press(0))).toBe("hidden");
@@ -180,7 +180,7 @@ describe("OverlayController pending live cards", () => {
   it("refresh() fills in only the visible card of that term", () => {
     const clock = new FakeClock();
     let pending = true;
-    const entry = () => ({ label: "SOC 2", full: "SOC 2", category: "Security" as const, example: "x", explanation: pending ? "Explaining…" : "Done.", pending });
+    const entry = () => ({ full: "SOC 2", category: "Law" as const, example: "x", explanation: pending ? "Explaining…" : "Done.", pending });
     const overlay = new OverlayController({ clock, lookup: (t) => (t === "SOC 2" ? entry() : glossary[t]) });
     const updates: TermCard[] = [];
     overlay.on("update", (c: TermCard) => updates.push(c));

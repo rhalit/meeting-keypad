@@ -1,107 +1,92 @@
 {
   "RAG": {
-    "label": "RAG",
     "full": "Retrieval-augmented generation",
     "explanation": "Before the AI answers, it first searches your own documents for the passages that matter and reads them. It then writes its answer from those passages instead of from memory alone. This makes answers more accurate and up to date, and lets the assistant show which document each fact came from.",
     "example": "We built it with RAG, so the model looks up the relevant pages before it writes an answer.",
-    "category": "AI"
+    "category": "Tech"
   },
   "vector database": {
-    "label": "Vector\nDB",
     "full": "Vector database",
     "explanation": "A database that stores text as long lists of numbers that capture its meaning. Texts with similar meaning get similar numbers, so you can search for ideas rather than exact words. A question about \"cancelling\" can find a page about \"ending your subscription\". It is the usual storage behind RAG search.",
     "example": "All the documents are chunked and stored in a vector database, so search works by meaning, not keywords.",
-    "category": "AI"
+    "category": "Tech"
   },
   "p95 latency": {
-    "label": "p95\nlatency",
     "full": "95th percentile latency",
     "explanation": "A speed measure for a system. Sort all response times from fastest to slowest; p95 is the time that 95 out of 100 requests beat. It describes how slow things feel for almost everyone, including unlucky users, which an average hides. A p95 of 1.8 seconds means only 5% of requests take longer.",
     "example": "Our p95 latency is 1.8 seconds, so nineteen out of twenty answers arrive faster than that.",
-    "category": "Infra"
+    "category": "Tech"
   },
   "quantization": {
-    "label": "Quanti-\nzation",
     "full": "Model quantization",
     "explanation": "Storing an AI model's internal numbers with less precision, for example 8 bits instead of 16 or 32. The model becomes smaller and faster and fits on cheaper hardware, usually with only a tiny loss in quality. It is like saving a photo at a slightly lower resolution to make the file much smaller.",
     "example": "We applied quantization, which shrinks the model so it runs on cheaper GPUs.",
-    "category": "AI"
+    "category": "Tech"
   },
   "LoRA": {
-    "label": "LoRA",
     "full": "Low-Rank Adaptation",
     "explanation": "A cheap way to teach an existing AI model a new style or skill. Instead of retraining the whole model, you train a small add-on layer that adjusts its behaviour. It needs far less data, time and hardware, often hours on one GPU, and the add-on can be swapped in or out without touching the original model.",
     "example": "We trained a small LoRA on two thousand of our best support replies, so it writes in our house style.",
-    "category": "AI"
+    "category": "Tech"
   },
   "feature flag": {
-    "label": "Feature\nflag",
     "full": "Feature flag",
     "explanation": "An on/off switch in the code that controls whether a feature is visible. New code can be shipped to production while hidden, then switched on for chosen customers, a percentage of users, or everyone, without a new release. If something goes wrong, the team simply flips the switch off again instead of rolling back code.",
     "example": "It's behind a feature flag, so we can switch it on per customer without a new release.",
-    "category": "Eng"
+    "category": "Tech"
   },
   "canary release": {
-    "label": "Canary\nrelease",
     "full": "Canary release",
     "explanation": "Rolling out a change to a small slice of users first, such as five percent, while watching error rates and performance. If the small group has no problems, the change goes out to everyone; if it does, only a few people were affected. The name comes from canaries that miners used to detect dangerous gas early.",
     "example": "A canary release: five percent of traffic first, and if error rates stay flat, we go to everyone.",
-    "category": "Eng"
+    "category": "Tech"
   },
   "autoscaling": {
-    "label": "Auto-\nscaling",
     "full": "Autoscaling",
     "explanation": "Letting the cloud add or remove servers automatically depending on how busy the service is. When many users arrive, for example on Monday morning, extra servers start up; when traffic drops at night, they shut down. Users get steady speed during peaks, and the company only pays for the capacity it actually needs at each moment.",
     "example": "Autoscaling handles it. The cluster adds servers when traffic climbs and removes them at night.",
-    "category": "Infra"
+    "category": "Tech"
   },
   "cold start": {
-    "label": "Cold\nstart",
     "full": "Cold start",
     "explanation": "The delay when a brand-new server or process handles its very first request, because it still has to boot, load code and, for AI, load the model into memory. Later requests are fast. Teams reduce cold starts by keeping a few servers \"warm\", meaning already running and ready, even when traffic is low.",
     "example": "The cold start is about eight seconds while the model loads into memory, so we keep two servers warm.",
-    "category": "Infra"
+    "category": "Tech"
   },
   "SOC 2": {
-    "label": "SOC 2",
     "full": "System and Organization Controls 2",
     "explanation": "An independent audit report showing that a company protects customer data properly: access control, monitoring, change management, incident response and more. Large customers, especially banks and enterprises, often require it before signing. Getting the full report usually takes several months, because auditors check that the controls actually work over a period of time.",
     "example": "The bank pilot won't sign until we have SOC 2.",
-    "category": "Security"
+    "category": "Law"
   },
   "pen test": {
-    "label": "Pen\ntest",
     "full": "Penetration test",
     "explanation": "A planned, authorised attack on your own product by security experts, usually an outside firm. They try to break in the way a real attacker would, then report the weaknesses they found and how serious each one is. Customers and auditors often ask for recent pen test results as proof that security is taken seriously.",
     "example": "So we've booked a pen test for December, where an outside firm tries to break into the product.",
-    "category": "Security"
+    "category": "Tech"
   },
   "CAC": {
-    "label": "CAC",
     "full": "Customer acquisition cost",
     "explanation": "How much it costs to win one new customer. Add up sales and marketing spending for a period and divide by the number of new customers won in that period. Spending 42,000 dollars to sign 14 customers gives a CAC of 3,000 dollars. It should be well below what a customer pays over their lifetime.",
     "example": "That puts our CAC at about three thousand dollars per customer, down from four.",
-    "category": "Biz"
+    "category": "Business"
   },
   "churn": {
-    "label": "Churn",
     "full": "Customer churn",
     "explanation": "The share of customers who cancel or stop paying in a given period, usually measured monthly. High churn means the company has to keep replacing lost customers just to stand still, which makes growth expensive. Early churn, right after signing up, often points to a poor onboarding experience rather than a bad product.",
     "example": "Churn is the worry. Three customers cancelled this month, two of them in their first ninety days.",
-    "category": "Biz"
+    "category": "Business"
   },
   "runway": {
-    "label": "Runway",
     "full": "Cash runway",
     "explanation": "How many months a company can keep operating before its money runs out, if spending and income stay as they are. Divide the cash in the bank by the monthly net loss. Nineteen months of runway means the company must become profitable or raise more money within that time, ideally starting fundraising well before it ends.",
     "example": "On cash: at the current spend we have nineteen months of runway, so we're fine until mid next year.",
-    "category": "Biz"
+    "category": "Finance"
   },
   "burn multiple": {
-    "label": "Burn\nmultiple",
     "full": "Burn multiple",
     "explanation": "A measure of how efficiently a startup turns spending into growth: cash burned divided by new yearly recurring revenue added in the same period. A burn multiple of 1.6 means spending 1.60 dollars to add one dollar of yearly revenue. Lower is better; investors typically see below 2 as acceptable and around 1 as excellent.",
     "example": "That number is our burn multiple, and I want it closer to one by the next board meeting.",
-    "category": "Biz"
+    "category": "Finance"
   }
 }

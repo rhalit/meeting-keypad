@@ -12,8 +12,8 @@ const LINES: MeetingLine[] = [
   { t: 30, speaker: "B", text: "bye", terms: [] },
 ];
 const GLOSSARY = {
-  LoRA: { label: "LoRA", full: "", explanation: "", example: "", category: "AI" },
-  RAG: { label: "RAG", full: "", explanation: "", example: "", category: "AI" },
+  LoRA: { full: "", explanation: "", example: "", category: "Tech" },
+  RAG: { full: "", explanation: "", example: "", category: "Tech" },
 } as Glossary;
 
 describe("MockSource", () => {
@@ -44,8 +44,8 @@ describe("MockSource", () => {
     clock.advance(1);
     expect(lines).toEqual([0, 10]);
     expect(terms).toEqual([
-      { term: "LoRA", label: "LoRA", category: "AI", source: "mock" },
-      { term: "RAG", label: "RAG", category: "AI", source: "mock" },
+      { term: "LoRA", category: "Tech", source: "mock" },
+      { term: "RAG", category: "Tech", source: "mock" },
     ]);
   });
 

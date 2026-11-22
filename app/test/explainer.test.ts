@@ -9,9 +9,9 @@ import { FakeLlmClient, flush } from "./fakeLlm.js";
 
 const S = 1000;
 const listener = { name: "Rhali", knows: "robotics student" };
-const soc2: TermCandidate = { term: "SOC 2", label: "SOC 2", category: "Security", source: "live" };
+const soc2: TermCandidate = { term: "SOC 2", category: "Law", source: "live" };
 const heardLine = { t: 146, speaker: "Speaker 1", text: "The bank pilot won't sign until we have so two." };
-const answer = { full: "SOC 2 (Service Organization Control 2)", explanation: "An audit report that shows a company keeps customer data safe.", category: "Security" };
+const answer = { full: "SOC 2 (Service Organization Control 2)", explanation: "An audit report that shows a company keeps customer data safe." };
 
 describe("Explainer", () => {
   let clock: FakeClock;
@@ -80,10 +80,33 @@ describe("Explainer", () => {
       title: answer.full,
       explanation: answer.explanation,
       example: heardLine.text,
-      category: "Security", // the key's category, so the chip matches the key
+      category: "Law", // the key's category, so the chip matches the key
       pending: false,
       durationMs: 15_000,
     });
+  });
+
+  it("the card's category is always the key's: the model is not asked for one, and an extra one is ignored", async () => {
+    explainer.prefetch(soc2);
+    const sys = llm.calls[0].req.messages[0].content;
+    expect(sys).not.toMatch(/category/i);
+    llm.calls[0].end({ ...answer, category: "Tech" });
+    await flush();
+    expect(explainer.lookup("SOC 2")?.category).toBe("Law");
+    explainer.reset(); // new meeting, cached explanation, not heard yet: still the key's category
+    expect(explainer.lookup("SOC 2")?.category).toBe("Law");
+  });
+
+  it("the example is only the sentence with the heard words, even across a line boundary", () => {
+    const e = new Explainer({ clock, llm, listener, log: () => {} });
+    const c: TermCandidate = { term: "NSDR", category: "Health", source: "live" };
+    e.noteHeard(
+      c,
+      { t: 20, text: "deep rest, which people call NSTR. It takes ten minutes. Then you get back to work and the afternoon goes fine." },
+      [{ t: 10, text: "We talked about sleep for an hour. My favourite tool is non-sleep" }],
+      "non-sleep deep rest",
+    );
+    expect(e.lookup("NSDR")?.example).toBe("My favourite tool is non-sleep deep rest, which people call NSTR.");
   });
 
   it("press before ready: shows 'Explaining…' at once with no countdown; a timeout shows the advice", async () => {
@@ -146,7 +169,7 @@ describe("Explainer", () => {
     });
     slots.add(soc2);
     expect(llm.calls).toHaveLength(1);
-    slots.add({ term: "RAG", label: "RAG", category: "AI", source: "mock" });
+    slots.add({ term: "RAG", category: "Tech", source: "mock" });
     expect(llm.calls).toHaveLength(1);
   });
 });

@@ -33,7 +33,7 @@ describe("CatchUpController", () => {
     llm = new FakeLlmClient();
     transcript = new TranscriptBuffer();
     slots = new SlotManager({ clock });
-    overlay = new OverlayController({ clock, lookup: () => ({ label: "RAG", full: "RAG", explanation: "e", example: "x", category: "AI" }) });
+    overlay = new OverlayController({ clock, lookup: () => ({ full: "RAG", explanation: "e", example: "x", category: "Tech" }) });
     logs = [];
     slot6 = [];
     cards = [];

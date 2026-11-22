@@ -4,7 +4,7 @@ interface PanelKey {
   slot: number;
   label: string;
   sub?: string;
-  bg?: string;
+  color?: string;
   state: string;
   term?: string;
 }
@@ -168,14 +168,18 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
     ...s.keys.map((k) => {
       const key = document.createElement("div");
       key.className = `key state-${k.state}`;
-      if (k.bg && k.state !== "empty") key.style.setProperty("--bg", k.bg);
+      if (k.color && k.state !== "empty") key.style.setProperty("--accent-key", k.color);
       key.title = k.term ? `${k.term} (${k.state})` : `slot ${k.slot} (${k.state})`;
+      const cat = document.createElement("div");
+      cat.className = "cat";
+      cat.textContent = k.state === "empty" ? "" : (k.sub ?? "");
       const label = document.createElement("div");
-      label.className = "label";
+      label.className = `label${k.sub ? "" : " plain"}`;
       label.textContent = k.label;
       const meta = document.createElement("div");
       meta.className = "meta";
-      meta.textContent = k.state === "empty" ? `${k.slot}` : `${k.slot} · ${k.sub ?? ""} · ${k.state}`;
+      meta.textContent = k.state === "empty" ? `${k.slot}` : `${k.slot} · ${k.state}`;
+      key.append(cat);
       key.append(label, meta);
       return key;
     }),

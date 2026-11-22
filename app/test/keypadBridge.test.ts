@@ -61,7 +61,7 @@ describe("KeypadBridge", () => {
     expect(msg.type).toBe("keys");
     expect(msg.keys).toHaveLength(9);
     expect(msg.keys[0]).toEqual({ slot: 0, label: "", state: "empty" });
-    expect(msg.keys[6]).toEqual({ slot: 6, label: "Catch\nup", bg: "#30363D", state: "shown" });
+    expect(msg.keys[6]).toEqual({ slot: 6, label: "Catch-up", state: "shown" });
   });
 
   it("afterwards sends only the changed slots, and the new state on a later hello", async () => {
@@ -69,7 +69,7 @@ describe("KeypadBridge", () => {
     const c = await client(port);
     c.ws.send(JSON.stringify({ type: "hello" }));
     await c.next();
-    const lora = { slot: 2, label: "LoRA", sub: "AI", bg: "#1F6FEB", state: "new" as const };
+    const lora = { slot: 2, label: "LoRA", sub: "Tech", color: "#58A6FF", state: "new" as const };
     bridge.apply([lora]);
     expect(await c.next()).toEqual({ type: "keys", keys: [lora] });
     c.ws.send(JSON.stringify({ type: "hello" }));

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, isValidLabel } from "../src/pipeline/protocol.js";
+import { CATEGORIES, MAX_TERM_CHARS } from "../src/pipeline/protocol.js";
 import { LISTENER_PLACEHOLDER, loadConfig, loadGlossary, loadMeeting } from "../src/pipeline/mockData.js";
 
 const MOCK = join(__dirname, "..", "..", "mock");
@@ -90,8 +90,8 @@ describe("mock/glossary.json", () => {
 
   for (const [term, e] of Object.entries<any>(glossary)) {
     it(`entry "${term}" is valid`, () => {
-      expect(Object.keys(e).sort()).toEqual(["category", "example", "explanation", "full", "label"]);
-      expect(isValidLabel(e.label), `label ${JSON.stringify(e.label)}`).toBe(true);
+      expect(Object.keys(e).sort()).toEqual(["category", "example", "explanation", "full"]);
+      expect(term.length, "the key shows the full term").toBeLessThanOrEqual(MAX_TERM_CHARS);
       expect(typeof e.full).toBe("string");
       expect(e.full.trim().length).toBeGreaterThan(0);
       const words = e.explanation.trim().split(/\s+/).length;

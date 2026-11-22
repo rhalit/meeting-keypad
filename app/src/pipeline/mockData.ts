@@ -11,7 +11,6 @@ export interface MeetingLine {
 }
 
 export interface GlossaryEntry {
-  label: string;
   full: string;
   explanation: string;
   example: string;
@@ -77,8 +76,8 @@ export function loadMeeting(path: string, listenerName: string): MeetingLine[] {
 export function loadGlossary(path: string): Glossary {
   const raw = readJson(path) as Record<string, GlossaryEntry>;
   for (const [term, e] of Object.entries(raw)) {
-    if (!isCategory(e?.category) || typeof e.label !== "string") {
-      throw new Error(`${path}: entry "${term}" has no valid label/category`);
+    if (!isCategory(e?.category)) {
+      throw new Error(`${path}: entry "${term}" has no valid category`);
     }
   }
   return raw;
@@ -88,5 +87,5 @@ export function loadGlossary(path: string): Glossary {
 export function glossaryCandidate(glossary: Glossary, term: string): TermCandidate | null {
   const e = glossary[term];
   if (!e) return null;
-  return { term, label: e.label, category: e.category, source: "mock" };
+  return { term, category: e.category, source: "mock" };
 }

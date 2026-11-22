@@ -18,37 +18,40 @@ function play(speed: Speed) {
   const placed: [number, number, string][] = [];
   slots.on("change", (keys: KeyState[]) => {
     for (const k of keys) {
-      if (k.state === "new") placed.push([((clock.now() - start) / 1000) * speed, k.slot, k.label.replace("\n", " ")]);
+      // A shift re-sends moved keys that are still "new"; count each term once, where it entered.
+      if (k.state === "new" && !placed.some((p) => p[2] === k.label)) placed.push([((clock.now() - start) / 1000) * speed, k.slot, k.label]);
     }
   });
   source.setSpeed(speed);
   source.play();
   clock.advance((310 * 1000) / speed);
-  return { placed, queued: slots.queued() };
+  return { placed, queued: slots.queued(), layout: slots.getAll().slice(0, 6).map((k) => k.label) };
 }
 
+// FIFO conveyor: every term enters on slot 0 the moment it is spoken; the others move along.
 const EXPECTED: [number, number, string][] = [
   [12, 0, "RAG"],
-  [24, 1, "Vector DB"],
-  [41, 2, "p95 latency"],
-  [58, 3, "Quanti- zation"],
-  [73, 4, "LoRA"],
-  [90, 5, "Feature flag"],
+  [24, 0, "Vector database"],
+  [41, 0, "p95 latency"],
+  [58, 0, "Quantization"],
+  [73, 0, "LoRA"],
+  [90, 0, "Feature flag"],
   [108, 0, "Canary release"],
-  [124, 1, "Auto- scaling"],
-  [139, 2, "Cold start"],
-  [146, 3, "SOC 2"],
-  [172, 4, "Pen test"],
-  [198, 5, "CAC"],
+  [124, 0, "Autoscaling"],
+  [139, 0, "Cold start"],
+  [146, 0, "SOC 2"],
+  [172, 0, "Pen test"],
+  [198, 0, "CAC"],
   [205, 0, "Churn"],
-  [230, 1, "Runway"],
-  [258, 2, "Burn multiple"],
+  [230, 0, "Runway"],
+  [258, 0, "Burn multiple"],
 ];
 
 describe("mock meeting through the pipeline (no presses)", () => {
-  it.each([1, 2] as Speed[])("puts every term on a key the moment it is spoken at %ix", (speed) => {
-    const { placed, queued } = play(speed);
+  it.each([1, 2] as Speed[])("puts every term on slot 0 the moment it is spoken at %ix", (speed) => {
+    const { placed, queued, layout } = play(speed);
     expect(placed).toEqual(EXPECTED);
     expect(queued).toEqual([]);
+    expect(layout).toEqual(["Burn multiple", "Runway", "Churn", "CAC", "Pen test", "SOC 2"]);
   });
 });

@@ -5,23 +5,25 @@ import type { TermCandidate } from "../src/pipeline/terms.js";
 import { FakeClock } from "./fakeClock.js";
 
 const S = 1000;
+const TECH = "#58A6FF";
 
-function cand(term: string, category: TermCandidate["category"] = "AI"): TermCandidate {
-  return { term, label: term.slice(0, 8), category, source: "mock" };
+function cand(term: string, category: TermCandidate["category"] = "Tech"): TermCandidate {
+  return { term, category, source: "mock" };
 }
 
-describe("SlotManager", () => {
+describe("SlotManager (FIFO conveyor)", () => {
   let clock: FakeClock;
   let slots: SlotManager;
   let changes: KeyState[][];
 
   const termAt = (slot: number) => slots.termAt(slot);
   const occupied = () => [0, 1, 2, 3, 4, 5].map(termAt);
+  const states = () => slots.getAll().slice(0, 6).map((k) => k.state);
 
-  /** Adds 6 terms 10 s apart (respecting the 2-per-10 s limit), filling slots 0..5. */
-  function fillAll(prefix = "t") {
-    for (let i = 0; i < 6; i++) {
-      slots.add(cand(`${prefix}${i}`));
+  /** Adds terms 10 s apart (respecting the 2-per-10 s limit). */
+  function addSpaced(terms: string[]) {
+    for (const t of terms) {
+      slots.add(cand(t));
       clock.advance(10 * S);
     }
   }
@@ -37,14 +39,14 @@ describe("SlotManager", () => {
     const all = slots.getAll();
     expect(all).toHaveLength(9);
     for (let i = 0; i < 6; i++) expect(all[i]).toEqual({ slot: i, label: "", state: "empty" });
-    expect(all[6]).toEqual({ slot: 6, label: "Catch\nup", bg: "#30363D", state: "shown" });
-    expect(all[7]).toEqual({ slot: 7, label: "Save", bg: "#30363D", state: "shown" });
-    expect(all[8]).toEqual({ slot: 8, label: "For me?", bg: "#30363D", state: "shown" });
+    expect(all[6]).toEqual({ slot: 6, label: "Catch-up", state: "shown" });
+    expect(all[7]).toEqual({ slot: 7, label: "Save", state: "shown" });
+    expect(all[8]).toEqual({ slot: 8, label: "For me?", state: "shown" });
   });
 
-  it("puts the first term on slot 0 as new and emits only that slot, as a full KeyState", () => {
-    slots.add({ term: "LoRA", label: "LoRA", category: "AI", source: "mock" });
-    expect(changes).toEqual([[{ slot: 0, label: "LoRA", sub: "AI", bg: "#1F6FEB", state: "new" }]]);
+  it("puts the first term on slot 0 as new, with the full term, category and colour", () => {
+    slots.add({ term: "vector database", category: "Tech", source: "mock" });
+    expect(changes).toEqual([[{ slot: 0, label: "Vector database", sub: "Tech", color: TECH, state: "new" }]]);
   });
 
   it("switches new to shown after 3 s", () => {
@@ -53,104 +55,85 @@ describe("SlotManager", () => {
     expect(slots.getAll()[0].state).toBe("new");
     clock.advance(1);
     expect(slots.getAll()[0].state).toBe("shown");
-    expect(changes.at(-1)).toEqual([{ slot: 0, label: "LoRA", sub: "AI", bg: "#1F6FEB", state: "shown" }]);
+    expect(changes.at(-1)).toEqual([{ slot: 0, label: "LoRA", sub: "Tech", color: TECH, state: "shown" }]);
   });
 
-  it("fills empty slots 0..5 in order", () => {
-    fillAll();
-    expect(occupied()).toEqual(["t0", "t1", "t2", "t3", "t4", "t5"]);
+  it("a new term always appears on slot 0 and every other term moves one slot forward", () => {
+    addSpaced(["a", "b", "c"]);
+    expect(occupied()).toEqual(["c", "b", "a", null, null, null]);
+    addSpaced(["d", "e", "f"]);
+    expect(occupied()).toEqual(["f", "e", "d", "c", "b", "a"]);
   });
 
-  it("queues a 7th term until the longest-shown term has had 20 s, then puts it in that slot", () => {
-    const m = new SlotManager({ clock, maxNewPerWindow: 100 }); // isolate the 20 s rule
-    for (let i = 0; i < 6; i++) {
-      m.add(cand(`t${i}`)); // placed at 0, 2, 4, 6, 8, 10 s
-      if (i < 5) clock.advance(2 * S);
-    }
-    m.add(cand("x"));
-    expect(m.queued()).toEqual(["x"]);
-    clock.advance(10 * S - 1); // t0 has 19.999 s
-    expect(m.queued()).toEqual(["x"]);
-    clock.advance(1);
-    expect(m.queued()).toEqual([]);
-    expect(m.termAt(0)).toBe("x");
+  it("the term on slot 5 leaves when a 7th arrives", () => {
+    addSpaced(["a", "b", "c", "d", "e", "f", "g"]);
+    expect(occupied()).toEqual(["g", "f", "e", "d", "c", "b"]);
   });
 
-  it("replaces a seen term right away, even when nothing has had 20 s yet", () => {
-    const m = new SlotManager({ clock, maxNewPerWindow: 100 });
-    for (let i = 0; i < 6; i++) {
-      m.add(cand(`t${i}`)); // placed at 0, 2, 4, 6, 8, 10 s
-      if (i < 5) clock.advance(2 * S);
-    }
-    m.press(5); // t5, 0 s on screen
-    m.add(cand("x"));
-    expect(m.termAt(5)).toBe("x");
-    expect(m.queued()).toEqual([]);
+  it("emits every slot whose content changed on a shift, and only those", () => {
+    addSpaced(["a", "b"]);
+    changes = [];
+    slots.add(cand("c"));
+    expect(changes).toHaveLength(1);
+    expect(changes[0].map((k) => [k.slot, k.label, k.state])).toEqual([
+      [0, "c", "new"],
+      [1, "b", "shown"],
+      [2, "a", "shown"],
+    ]);
   });
 
-  it("still applies the 2-per-10 s limit when a seen term could be replaced", () => {
-    for (let i = 0; i < 6; i++) slots.add(cand(`t${i}`));
-    clock.advance(20 * S); // placed at 0,0,10,10,20,20 s; window full until 30 s
-    slots.press(3);
-    slots.add(cand("v"));
-    expect(slots.queued()).toEqual(["v"]);
-    clock.advance(10 * S);
-    expect(termAt(3)).toBe("v"); // seen first, although t0 is older
+  it("opened terms are not removed early: they move along and leave from slot 5 like the others", () => {
+    addSpaced(["a", "b", "c", "d", "e", "f"]);
+    slots.press(0); // f opened
+    addSpaced(["g", "h", "i", "j", "k"]);
+    expect(occupied()).toEqual(["k", "j", "i", "h", "g", "f"]);
+    expect(slots.getAll()[5].state).toBe("seen");
+    addSpaced(["l"]);
+    expect(occupied()).not.toContain("f");
   });
 
-  it("replaces the longest-shown unopened term once it has had at least 20 s", () => {
-    slots.add(cand("a"));
-    clock.advance(10 * S);
+  it("a term's state travels with it (seen stays seen, new stays new)", () => {
+    addSpaced(["a"]);
+    slots.press(0); // a seen
     slots.add(cand("b"));
-    clock.advance(10 * S);
-    slots.add(cand("c"));
-    clock.advance(10 * S);
-    slots.add(cand("d"));
-    clock.advance(10 * S);
-    slots.add(cand("e"));
-    clock.advance(10 * S);
-    slots.add(cand("f"));
+    expect(states().slice(0, 2)).toEqual(["new", "seen"]);
     clock.advance(1 * S);
-    // a is oldest (51 s): new term goes to slot 0
-    slots.add(cand("g"));
-    expect(termAt(0)).toBe("g");
-    clock.advance(10 * S);
-    // b is now oldest (on screen since 10 s) -> slot 1
-    slots.add(cand("h"));
-    expect(termAt(1)).toBe("h");
-    expect(occupied()).toEqual(["g", "h", "c", "d", "e", "f"]);
+    clock.advance(10 * S); // b shown, then c placed later below
+    slots.add(cand("c"));
+    expect(states().slice(0, 3)).toEqual(["new", "shown", "seen"]);
   });
 
-  it("applies the rate limit to replacements too", () => {
-    slots.add(cand("a")); // 0 s
-    clock.advance(11 * S);
-    slots.add(cand("b")); // 11 s
-    slots.add(cand("c"));
-    clock.advance(11 * S);
-    slots.add(cand("d")); // 22 s
-    slots.add(cand("e"));
-    clock.advance(11 * S);
-    slots.add(cand("f")); // 33 s
-    expect(occupied()).toEqual(["a", "b", "c", "d", "e", "f"]);
-    slots.add(cand("g")); // 2nd placement in the window: replaces a (33 s on screen)
-    expect(termAt(0)).toBe("g");
-    slots.add(cand("h")); // 3rd in the window -> queued
-    expect(slots.queued()).toEqual(["h"]);
-    clock.advance(10 * S); // 43 s: window frees, b (32 s) is the longest-shown
-    expect(termAt(1)).toBe("h");
+  it("the 3 s new timer follows the term and emits the slot it is on now", () => {
+    const m = new SlotManager({ clock, maxNewPerWindow: 100 });
+    const ch: KeyState[][] = [];
+    m.on("change", (k: KeyState[]) => ch.push(k));
+    m.add(cand("a")); // 0 s
+    clock.advance(2 * S);
+    m.add(cand("b")); // a moves to slot 1, still new
+    expect(m.getAll()[1]).toMatchObject({ label: "a", state: "new" });
+    ch.length = 0;
+    clock.advance(1 * S); // a's 3 s are up
+    expect(ch).toEqual([[{ slot: 1, label: "a", sub: "Tech", color: TECH, state: "shown" }]]);
+    expect(m.getAll()[0].state).toBe("new"); // b keeps its own timer
   });
 
   it("places at most 2 new terms per 10 s; extras queue in order", () => {
     slots.add(cand("a"));
     slots.add(cand("b"));
     slots.add(cand("c"));
-    expect(occupied()).toEqual(["a", "b", null, null, null, null]);
+    expect(occupied()).toEqual(["b", "a", null, null, null, null]);
     expect(slots.queued()).toEqual(["c"]);
     clock.advance(10 * S - 1);
-    expect(termAt(2)).toBeNull();
+    expect(termAt(0)).toBe("b");
     clock.advance(1);
-    expect(termAt(2)).toBe("c");
+    expect(occupied()).toEqual(["c", "b", "a", null, null, null]);
     expect(slots.queued()).toEqual([]);
+  });
+
+  it("a full keypad does not block: a queued term only waits for the rate window", () => {
+    addSpaced(["a", "b", "c", "d", "e", "f"]);
+    slots.add(cand("x"));
+    expect(termAt(0)).toBe("x"); // no 20 s rule, no seen term needed
   });
 
   it("merges duplicates that differ in case or plural", () => {
@@ -161,7 +144,7 @@ describe("SlotManager", () => {
     clock.advance(10 * S);
     slots.add(cand("Vector Databases"));
     slots.add(cand("vector-database"));
-    expect(occupied()).toEqual(["LoRA", "vector database", null, null, null, null]);
+    expect(occupied()).toEqual(["vector database", "LoRA", null, null, null, null]);
     expect(slots.queued()).toEqual([]);
   });
 
@@ -174,12 +157,23 @@ describe("SlotManager", () => {
     expect(slots.queued()).toEqual(["feature flag"]);
   });
 
+  it("re-mentioning a term that is on screen or already left changes nothing", () => {
+    addSpaced(["a", "b", "c", "d", "e", "f", "g"]); // a has left
+    changes = [];
+    slots.add(cand("a"));
+    slots.add(cand("c"));
+    clock.advance(60 * S);
+    expect(changes.filter((c) => c.some((k) => k.state === "new"))).toEqual([]);
+    expect(occupied()).toEqual(["g", "f", "e", "d", "c", "b"]);
+  });
+
   it("a press on a term slot marks it seen and cancels the pending new -> shown", () => {
     slots.add(cand("LoRA"));
+    clock.advance(600); // outside the press grace
     changes = [];
     const r = slots.press(0);
     expect(r).toEqual({ kind: "term", slot: 0, term: "LoRA" });
-    expect(changes).toEqual([[{ slot: 0, label: "LoRA", sub: "AI", bg: "#1F6FEB", state: "seen" }]]);
+    expect(changes).toEqual([[{ slot: 0, label: "LoRA", sub: "Tech", color: TECH, state: "seen" }]]);
     clock.advance(5 * S);
     expect(slots.getAll()[0].state).toBe("seen");
     expect(changes).toHaveLength(1);
@@ -193,77 +187,46 @@ describe("SlotManager", () => {
     expect(changes).toEqual([]);
   });
 
-  it("when all slots are full, replaces a seen term first, even one younger than 20 s", () => {
-    fillAll(); // t0..t5 placed at 0,10,..,50 s; now 60 s
-    slots.press(4); // t4 (placed 40 s, 20 s on screen) opened
-    slots.press(5); // t5 (placed 50 s, 10 s on screen) opened
-    slots.add(cand("x"));
-    // t0 is the longest-shown unopened term (60 s) but seen terms go first: oldest seen = t4
-    expect(termAt(4)).toBe("x");
-    clock.advance(10 * S);
-    slots.add(cand("y"));
-    expect(termAt(5)).toBe("y"); // the remaining seen term, only 20 s old
-    clock.advance(10 * S);
-    slots.add(cand("z"));
-    expect(termAt(0)).toBe("z"); // no seen terms left -> longest-shown unopened
+  describe("press within 500 ms after a shift", () => {
+    beforeEach(() => {
+      addSpaced(["a", "b", "c"]); // c, b, a
+    });
+
+    it("goes to the term that was on that key before the shift, and marks it seen where it is now", () => {
+      slots.add(cand("d")); // d, c, b, a
+      clock.advance(499);
+      expect(slots.press(0)).toEqual({ kind: "term", slot: 0, term: "c" });
+      expect(slots.getAll()[1]).toMatchObject({ label: "c", state: "seen" });
+      expect(slots.getAll()[0].state).toBe("new"); // d untouched
+    });
+
+    it("goes to the term on the key after 500 ms", () => {
+      slots.add(cand("d"));
+      clock.advance(500);
+      expect(slots.press(0)).toEqual({ kind: "term", slot: 0, term: "d" });
+    });
+
+    it("a key that was empty before the shift goes to the term on it now", () => {
+      slots.add(cand("d")); // slot 3 was empty, now holds a
+      clock.advance(100);
+      expect(slots.press(3)).toEqual({ kind: "term", slot: 3, term: "a" });
+      expect(slots.getAll()[3].state).toBe("seen");
+    });
+
+    it("still opens a term that just left from slot 5", () => {
+      addSpaced(["d", "e", "f"]); // f e d c b a
+      slots.add(cand("g")); // a leaves
+      clock.advance(200);
+      expect(slots.press(5)).toEqual({ kind: "term", slot: 5, term: "a" });
+      expect(occupied()).toEqual(["g", "f", "e", "d", "c", "b"]);
+    });
   });
 
-  it("never brings back a term that was opened, even after it was replaced", () => {
-    slots.add(cand("LoRA"));
-    slots.press(0);
-    clock.advance(10 * S);
-    for (let i = 1; i < 6; i++) {
-      slots.add(cand(`t${i}`));
-      clock.advance(10 * S);
-    }
-    slots.add(cand("x")); // replaces the seen LoRA
-    expect(occupied()).not.toContain("LoRA");
-    clock.advance(30 * S);
-    slots.add(cand("loras"));
-    clock.advance(60 * S);
-    expect(occupied()).not.toContain("LoRA");
-    expect(occupied()).not.toContain("loras");
-    expect(slots.queued()).toEqual([]);
-  });
-
-  it("lets a replaced but never-opened term come back when it is spoken again", () => {
-    fillAll(); // t0..t5, now 60 s
-    slots.add(cand("x")); // replaces t0
-    expect(occupied()).not.toContain("t0");
-    clock.advance(10 * S);
-    slots.add(cand("t0"));
-    expect(occupied()).toContain("t0");
-  });
-
-  it("never moves a term to another slot while it is on screen", () => {
-    const seenAt = new Map<string, number>();
-    for (let i = 0; i < 40; i++) {
-      slots.add(cand(`w${i}`));
-      if (i % 3 === 0) slots.press(i % 6);
-      clock.advance(7 * S);
-      for (let s = 0; s < 6; s++) {
-        const t = termAt(s);
-        if (t === null) continue;
-        if (seenAt.has(t)) expect(seenAt.get(t)).toBe(s);
-        seenAt.set(t, s);
-      }
-    }
-  });
-
-  it("re-mentioning an on-screen term changes nothing", () => {
-    slots.add(cand("LoRA"));
-    clock.advance(4 * S);
-    changes = [];
-    slots.add(cand("LoRA"));
-    clock.advance(60 * S);
-    expect(changes).toEqual([]);
-    expect(slots.getAll()[0].state).toBe("shown");
-  });
-
-  it("reset clears terms, queue, opened set and timers, emitting the cleared slots", () => {
+  it("reset clears terms, queue, shown set and timers, emitting the cleared slots", () => {
     slots.add(cand("a"));
     slots.add(cand("b"));
     slots.add(cand("c"));
+    clock.advance(600);
     slots.press(1);
     changes = [];
     slots.reset();
@@ -271,17 +234,15 @@ describe("SlotManager", () => {
     expect(slots.queued()).toEqual([]);
     clock.advance(60 * S);
     expect(changes).toHaveLength(1);
-    slots.add(cand("b")); // opened before reset, allowed again after reset
+    slots.add(cand("b")); // shown before reset, allowed again after reset
     expect(termAt(0)).toBe("b");
   });
 
   it("action overrides change slots 6-8 only, emit the slot and are cleared by reset", () => {
-    const changes: KeyState[][] = [];
-    slots.on("change", (k: KeyState[]) => changes.push(k));
     slots.setActionOverride(6, { state: "busy" });
-    expect(slots.getAll()[6]).toEqual({ slot: 6, label: "Catch\nup", bg: "#30363D", state: "busy" });
-    slots.setActionOverride(7, { label: "Saved ✓", bg: "#2DA44E" });
-    expect(slots.getAll()[7]).toEqual({ slot: 7, label: "Saved ✓", bg: "#2DA44E", state: "shown" });
+    expect(slots.getAll()[6]).toEqual({ slot: 6, label: "Catch-up", state: "busy" });
+    slots.setActionOverride(7, { label: "Saved ✓", color: "#3FB950" });
+    expect(slots.getAll()[7]).toEqual({ slot: 7, label: "Saved ✓", color: "#3FB950", state: "shown" });
     slots.setActionOverride(3, { state: "busy" }); // term slot: ignored
     slots.setActionOverride(8, null); // nothing to clear: no event
     expect(changes.map((c) => c.map((k) => k.slot))).toEqual([[6], [7]]);
@@ -289,6 +250,20 @@ describe("SlotManager", () => {
     expect(slots.getAll()[6].state).toBe("shown");
     expect(slots.getAll()[7].label).toBe("Save");
     expect(changes[changes.length - 1].map((k) => k.slot).sort()).toEqual([6, 7]);
+  });
+
+  it("random use never shows a term twice and keeps the reading order newest first", () => {
+    const m = new SlotManager({ clock, maxNewPerWindow: 100 });
+    let n = 0;
+    for (let i = 0; i < 40; i++) {
+      m.add(cand(`w${n++}`));
+      if (i % 3 === 0) m.press(i % 6);
+      clock.advance(7 * S);
+      const on = [0, 1, 2, 3, 4, 5].map((s) => m.termAt(s)).filter((t): t is string => t !== null);
+      expect(new Set(on).size).toBe(on.length);
+      const idx = on.map((t) => Number(t.slice(1)));
+      expect(idx).toEqual([...idx].sort((a, b) => b - a));
+    }
   });
 });
 
@@ -302,8 +277,8 @@ describe("SlotManager placed event", () => {
     slots.add(cand("a"));
     slots.add(cand("b"));
     slots.add(cand("c")); // third within 10 s: queued
-    expect(events).toEqual(["change 0", "placed 0 a", "change 1", "placed 1 b"]);
-    clock.advance(10 * S); // includes the "new" -> "shown" changes of slots 0 and 1 after 3 s
-    expect(events.slice(4)).toEqual(["change 0", "change 1", "change 2", "placed 2 c"]);
+    expect(events).toEqual(["change 0", "placed 0 a", "change 0,1", "placed 0 b"]);
+    clock.advance(10 * S); // includes the "new" -> "shown" changes of a (slot 1) and b (slot 0) after 3 s
+    expect(events.slice(4)).toEqual(["change 1", "change 0", "change 0,1,2", "placed 0 c"]);
   });
 });

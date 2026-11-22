@@ -1,6 +1,7 @@
 // Prompts and schemas for Catch-up and Save.
 
 import type { ChatMessage } from "./llm.js";
+import { CATEGORIES } from "./protocol.js";
 import type { TranscriptLine } from "./transcriptBuffer.js";
 
 /** Meeting seconds as m:ss. */
@@ -73,7 +74,7 @@ export function saveMessages(lines: TranscriptLine[]): ChatMessage[] {
 
 // --- live term spotter (LLM_SPOTTER_MODEL) ------------------------------------------------------
 
-/** Strict-mode friendly. `heard` = the words as transcribed, so the app can find the sentence. */
+/** Strict-mode friendly. `heard` = the words as transcribed, so the app can check them and find the sentence. */
 export const SPOTTER_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -83,13 +84,14 @@ export const SPOTTER_SCHEMA: Record<string, unknown> = {
         type: "object",
         properties: {
           term: { type: "string", description: "Canonical spelling, 1-4 words" },
-          heard: { type: "string", description: "The words exactly as they appear in the transcript" },
-          label: { type: "string", description: "Key label: at most 2 lines of at most 8 characters, separated by \\n" },
-          category: { type: "string", enum: ["AI", "Infra", "Eng", "Biz", "Security"] },
+          heard: { type: "string", description: "The words exactly as they appear in the NEW lines" },
+          full: { type: "string", description: "Full name or expansion, or the term itself" },
+          variantOf: { type: "string", description: 'The "Already shown" term this is a variant or mishearing of, or ""' },
+          category: { type: "string", enum: [...CATEGORIES] },
           confidence: { type: "number", description: "0 to 1" },
           reason: { type: "string", description: "A few words" },
         },
-        required: ["term", "heard", "label", "category", "confidence", "reason"],
+        required: ["term", "heard", "full", "variantOf", "category", "confidence", "reason"],
         additionalProperties: false,
       },
     },
@@ -97,6 +99,11 @@ export const SPOTTER_SCHEMA: Record<string, unknown> = {
   required: ["terms"],
   additionalProperties: false,
 };
+
+export const CATEGORY_GUIDE =
+  "Tech = software, AI, computing, internet, engineering; Science = physics, chemistry, biology, maths, research; " +
+  "Health = medicine, body, mind, fitness, nutrition; Business = companies, management, marketing, sales; " +
+  "Finance = money, investing, economics, accounting; Law = legal, regulation, compliance, policy; Other = anything else";
 
 export function spotterMessages(opts: {
   listener: string;
@@ -108,20 +115,19 @@ export function spotterMessages(opts: {
     {
       role: "system",
       content:
-        `You spot jargon in a live meeting transcript so it can be explained to one listener: ${opts.listener}.\n` +
-        "Pick from the NEW lines every jargon word or technical term specific to a domain (AI, software, infrastructure, " +
-        "security, business, finance, legal...) that this listener would probably not know: established terms of art you " +
-        "would find in a glossary, such as acronyms, metrics, named techniques and practices.\n" +
-        "Skip: everyday words and phrases most people know (meeting, team, customer, price, revenue, email, app, website, " +
-        "report, bug, test, spike, accounts); ordinary descriptions that are not fixed terms (\"Monday morning spike\", " +
-        "\"cost per revenue\"); names of people, companies and products; plain numbers; anything in \"Already shown\" and " +
-        "variants of it (\"canary rollout\" after \"canary release\").\n" +
+        `You spot jargon in a live meeting or talk transcript so it can be explained to one listener: ${opts.listener}.\n` +
+        "Pick from the NEW lines every jargon word or technical term specific to a field (tech, science, health, business, " +
+        "finance, law...) that this listener would probably not know: established terms of art you would find in a glossary, " +
+        "such as acronyms, metrics, named techniques, substances and practices.\n" +
+        "Skip: everyday words and phrases most people know (meeting, team, customer, price, email, app, website, report, " +
+        "sleep, stress, exercise); ordinary descriptions that are not fixed terms; names of people, companies and products; " +
+        "plain numbers; anything only in the Earlier lines; anything in \"Already shown\" and variants of it (\"canary rollout\" " +
+        'after "canary release", the spelled-out name of an acronym already shown, or a mishearing of it: "NSTR" after "NSDR").\n' +
         'Spell each term the standard way even when speech-to-text misheard it (e.g. "so two" -> "SOC 2", "rag" -> "RAG", ' +
         '"laura" -> "LoRA"). Use the short form people say ("pen test", not a phrase around it).\n' +
-        "For each term: term (canonical spelling, 1-4 words), heard (the words exactly as in the transcript), label (for a small " +
-        'key: the term itself, shortened if needed, never another word; at most 2 lines of at most 8 characters, lines separated ' +
-        'by \\n, e.g. "Vector\\nDB", "p95\\nlatency", "SOC 2"), ' +
-        "category (AI; Infra = servers, cloud, deployment; Eng = software practice; Biz = business, finance, sales; Security), " +
+        "For each term: term (canonical spelling, 1-4 words), heard (the words exactly as in the NEW lines), " +
+        "full (the full name or expansion, or the term itself), variantOf (the Already shown term it is a variant or " +
+        `mishearing of, else ""), category (${CATEGORY_GUIDE}), ` +
         "confidence (0 to 1: 0.9 for a clear term of art this listener would not know, 0.5 or less for borderline or " +
         "common words), reason (a few words).\n" +
         'Return at most 3 terms, best first. Most lines contain none: then return {"terms": []}.',
@@ -143,9 +149,8 @@ export const EXPLAIN_SCHEMA: Record<string, unknown> = {
   properties: {
     full: { type: "string", description: "Full name or expansion of the term, or the term itself" },
     explanation: { type: "string", description: "40-60 words, plain English" },
-    category: { type: "string", enum: ["AI", "Infra", "Eng", "Biz", "Security"] },
   },
-  required: ["full", "explanation", "category"],
+  required: ["full", "explanation"],
   additionalProperties: false,
 };
 
@@ -158,7 +163,7 @@ export function explainMessages(opts: { term: string; listener: string; heard?: 
         `You explain a jargon term that just came up in a meeting to ${opts.listener}. Return JSON with: ` +
         'full (the full name or expansion, e.g. "Retrieval-augmented generation" for RAG; the term itself if it has none), ' +
         "explanation (40 to 60 words of plain everyday English for this listener: what it is and what it means here; " +
-        "no other jargon; do not start by repeating the term), category (AI, Infra, Eng, Biz or Security).",
+        "no other jargon; do not start by repeating the term).",
     },
     {
       role: "user",

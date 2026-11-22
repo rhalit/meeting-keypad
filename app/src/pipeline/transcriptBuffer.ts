@@ -1,8 +1,16 @@
-/** A spoken line; `t` is meeting time in seconds. Live lines may have no speaker. */
+/** A word with meeting-time seconds (live lines only). */
+export interface TranscriptWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** A spoken line; `t` is meeting time in seconds. Live lines may have no speaker, and carry word timings. */
 export interface TranscriptLine {
   t: number;
   speaker?: string;
   text: string;
+  words?: TranscriptWord[];
 }
 
 export class TranscriptBuffer {

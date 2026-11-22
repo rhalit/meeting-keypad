@@ -44,6 +44,13 @@ and emits `TermCandidate { source: "live" }` into the SlotManager. When a live t
 (`explainer.ts`, `LLM_MODEL`) writes its card at once; a press before it is ready shows "Explaining…" and fills in.
 Spotted terms are added to Deepgram keyterms at the next Start listening. The listener profile for the prompts is
 `mock/config.json` `listenerKnows` (currently a general audience).
+Phase 3c: faster spotting, new key design. The Deepgram assembler (`stt.ts`) also ends a line at the next
+is_final boundary once it has >= 12 words or >= 6 s of speech (never inside a segment), so a pause-free
+monologue does not hold terms back. Lines carry word timestamps; `latency.ts` logs speech→key per placed live term.
+The spotter accepts a term only if its `heard` words are in the NEW lines (checked in code) and drops variants /
+mishearings of terms already shown (`variantOf()`). General categories (Tech, Science, Health, Business, Finance,
+Law, Other). The app sends the full term; the plugin fits it (`plugin/.../Core/TextFit.cs`). Term keys are a FIFO
+conveyor. Offline tuning: `record:live` saves raw Deepgram messages, `replay:live` runs the pipeline from them.
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -63,6 +70,14 @@ Do not build features from later phases unless asked.
   speech→key delay, free-tier interval floor): `cd app && npm run eval:terms` (real audio through the speakers, ~5 min)
   or `npm run eval:terms -- --text` (no audio, script lines as finals). Flags: `--profile "<knows>"` / `--profile config`,
   `--model <id>`, `--interval <ms>`, `--keyterms`, `--lines N`, `--tag <name>` → `output/eval-terms-<name>.json`.
+- Record a live session for offline tuning (system audio → Deepgram only, no spotter, no LLM):
+  `cd app && npm run record:live -- --tag podcast --seconds 180` → `tools/recordings/podcast.jsonl` (gitignored).
+  Needs the system audio permission for the terminal (plain Node, like `smoke:live`).
+- Replay it through the full live pipeline: `npm run replay:live -- ../tools/recordings/podcast.jsonl --terms "NSDR=Health, dopamine=Science"`
+  (keyword fake spotter on virtual time, free; no `--terms` = acronyms). `--fake-latency <ms>`, `--interval <ms>`,
+  `--max-words N`, `--max-s S`, `--spotter real` (LLM_SPOTTER_MODEL in real time, costs budget), `--tag <name>` →
+  `output/replay-<name>.json`. Reports line lengths and speech→key per term (final + spot + queue).
+- Plugin text-fitting checks: `cd plugin/MeetingKeysPlugin && dotnet run --project tests/TextFitCheck` (not in the `.slnx`).
 - audiotee (once per machine): `cd app && npm run build:audiotee` → `tools/audiotee/bin/audiotee`
   (pinned commit in `tools/audiotee/VERSION`, see `tools/audiotee/README.md`).
 - Live smoke run (plays the mock meeting voiced by `say` through the speakers, real audiotee + Deepgram):
@@ -83,14 +98,23 @@ Do not build features from later phases unless asked.
   - csharp/plugin-features/logging.md
   - csharp/plugin-features/implementing-dynamic-folders.md (fallback approach)
 - The Node.js SDK is discontinued: C# only.
-- Do not guess SDK members. Fetch the docs page when unsure.
-- Do not pass a font size to `BitmapBuilder.DrawText`; the service picks one per device.
+- Do not guess SDK members. Fetch the docs page when unsure; the docs are incomplete, so also check the real API
+  by reflection on `~/.nuget/packages/logipluginapi/<version>/lib/net10.0/PluginApi.dll` (e.g. `IsWidget`,
+  `DrawText(text, x, y, w, h, color, fontSize, lineHeight, spaceHeight, fontName)` are only found there).
+- `KeySlotCommand` is a widget (`IsWidget = true`) so the image fills the key without the device-drawn action name.
+- The plugin passes explicit font sizes to `DrawText` (text fitting needs them) with the service's own font
+  "Brown Logitech Pan Bold"; `TextFit` estimates widths from that font's advance widths (no public measuring API).
 
 ## Rules
 - The plugin never blocks the Logi Plugin Service: network I/O runs on background tasks,
   reconnect to the app every 2 s.
-- Key labels: at most 2 lines of 8 characters. The app shortens them; the full term only appears in the overlay.
-- A term placed on a key never moves to another key.
+- Key labels: the app sends the full term (at most 4 words / 40 characters) or action name, never shortened.
+  The plugin fits it in at most 2 lines broken between words at the largest size that fits, and abbreviates a word
+  only if it cannot fit on a line at the smallest size (text beyond 2 lines ends with "…").
+- Term keys are a FIFO conveyor: slots 0-5 read left to right, top to bottom; a new term always appears on slot 0,
+  every other term moves one slot forward, the term on slot 5 leaves (opened terms are not removed early). A term's
+  state (new / shown / seen) moves with it. At most 2 new terms per 10 s (extras queue). A press within 500 ms after
+  a shift goes to the term that was on that key before the shift. A term shown once is not shown again in that meeting.
 - Never commit `app/.env`, never print or log the key. LLM settings live there:
   `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
   (see `app/.env.example` for Groq / Ollama / OpenRouter). Term spotter: `LLM_SPOTTER_MODEL` (currently
@@ -107,11 +131,19 @@ Do not build features from later phases unless asked.
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
 - `mock/config.json`: `{ "listenerName": "...", "listenerKnows": "...", "keyterms": [] }`; meeting lines say `{listener}`
   where a speaker addresses them. `listenerKnows` describes the listener for the spotter and explanation prompts. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
-- Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end? }`, where `t` = meeting seconds since Start listening
-  and `speaker` = "Speaker N" from Deepgram diarization.
-- `mock/glossary.json`: `{ "<term>": { "label", "full", "explanation", "example", "category" } }`
-- Term event (every source, mock or live): `TermCandidate { term, label, category, source: "mock" | "live" }`
-  in `app/src/pipeline/terms.ts`.
-- Term spotter output: `{ "terms": [ { "term", "heard", "label", "category", "confidence", "reason" } ] }`
-  (`term` = canonical spelling, `heard` = the words as transcribed, used to find the "In this meeting" sentence).
-- Live explanation (`Explainer`): `{ "full", "explanation", "category" }`, cached per term for the app session.
+- Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end?, words?: [{ text, start, end }], reason? }`,
+  where `t` = meeting seconds since Start listening, `speaker` = "Speaker N" from Deepgram diarization, `words` = word
+  timings in meeting seconds, `reason` = why the line ended (`length` | `speech_final` | `utterance_end` | `flush`).
+- `mock/glossary.json`: `{ "<term>": { "full", "explanation", "example", "category" } }`
+- Categories: `Tech`, `Science`, `Health`, `Business`, `Finance`, `Law`, `Other`, each with a colour in
+  `CATEGORY_COLORS` (`app/src/pipeline/protocol.ts`, same in `tools/fake-core.mjs`).
+- Term event (every source, mock or live): `TermCandidate { term, category, source: "mock" | "live" }`
+  in `app/src/pipeline/terms.ts`. The key shows `displayTerm(term)`.
+- Key state (protocol v2): `{ slot, label, sub?, color?, state }` (`label` = full term, `sub` = category, `color` = category colour).
+- Term spotter output: `{ "terms": [ { "term", "heard", "full", "variantOf", "category", "confidence", "reason" } ] }`
+  (`term` = canonical spelling, `heard` = the words as transcribed (must be in the NEW lines; also used to find the
+  "In this meeting" sentence), `full` = expansion, `variantOf` = an already-shown term this is a variant/mishearing of, or "").
+- Live explanation (`Explainer`): `{ "full", "explanation" }`, cached per term for the app session. The card's category is
+  always the key's. "In this meeting" = only the sentence(s) with the heard words, max ~25 words (`example.ts`).
+- Recording (`record:live`, `app/src/pipeline/replay.ts`): JSONL, line 1 `{ type: "header", version: 1, model, language, ... }`,
+  then `{ at: <ms since start>, offset, msg: <Deepgram message> }` or `{ at, offset, type: "connect" }`.

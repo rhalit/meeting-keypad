@@ -116,7 +116,7 @@ describe("SaveController", () => {
     save.press();
     llm.last().end(canary);
     await save.whenIdle();
-    expect(slots.getAll()[SAVE_SLOT]).toMatchObject({ label: "Saved ✓", bg: SAVED_GREEN, state: "shown" });
+    expect(slots.getAll()[SAVE_SLOT]).toMatchObject({ label: "Saved ✓", color: SAVED_GREEN, state: "shown" });
     expect(card()).toMatchObject({ eyebrow: "Saved ✓", title: canary.title, tone: "success", durationMs: 3000 });
     clock.advance(1499);
     expect(slots.getAll()[SAVE_SLOT].label).toBe("Saved ✓");

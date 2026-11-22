@@ -43,7 +43,7 @@ async function main(): Promise<number> {
   const cards: OverlayCard[] = [];
   overlay.on("show", (c: OverlayCard) => cards.push(c));
   slots.on("change", (keys) => {
-    for (const k of keys) if (k.slot >= 6) log(`key ${k.slot}: "${k.label.replace("\n", " ")}" ${k.state}${k.bg ? ` ${k.bg}` : ""}`);
+    for (const k of keys) if (k.slot >= 6) log(`key ${k.slot}: "${k.label.replace("\n", " ")}" ${k.state}${k.color ? ` ${k.color}` : ""}`);
   });
   let failures = 0;
 

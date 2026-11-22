@@ -87,7 +87,7 @@ const containsWords = (hay: string, needle: string) => ` ${plain(hay)} `.include
 /** The glossary term a spotted term stands for, or null (a false positive). */
 export function matchGlossary(glossary: Glossary, term: string): string | null {
   for (const [g, e] of Object.entries(glossary)) {
-    const forms = [g, e.full, e.label.replace(/\n/g, " ").replace(/- /g, "")];
+    const forms = [g, e.full];
     for (const f of forms) {
       if (compact(f) === compact(term)) return g;
       // Longer spotted term around the glossary one ("SOC 2 Type II", "customer churn rate").
@@ -183,13 +183,13 @@ async function main(): Promise<number> {
   };
   spotter.on("term", (c: TermCandidate, info: SpotInfo) => {
     spotted.push({ c, info, at: meetingAt() });
-    explainer.noteHeard(c, info.line, info.context);
+    explainer.noteHeard(c, info.line, info.context, info.heard);
     slots.add(c);
   });
   slots.on("placed", ({ slot, candidate }: { slot: number; candidate: TermCandidate }) => {
     placed.push({ slot, c: candidate, at: meetingAt() });
-    console.log(`   KEY ${slot} <- "${candidate.term}" ${JSON.stringify(candidate.label)} at ${f1(meetingAt())} s`);
-    explainer.prefetch(candidate.term);
+    console.log(`   KEY ${slot} <- "${candidate.term}" (${candidate.category}) at ${f1(meetingAt())} s`);
+    explainer.prefetch(candidate);
   });
   explainer.on("ready", (term: string) => ready.set(term, meetingAt()));
 
@@ -286,7 +286,7 @@ async function main(): Promise<number> {
     const s = spotted.find((x) => x.c.term === p.c.term);
     const row = g ? rows.find((r) => r.glossary === g && !r.found) : undefined;
     if (!g || !row) {
-      if (!g) falsePositives.push({ term: p.c.term, label: p.c.label, slot: p.slot, at: p.at, reason: s?.info.reason ?? "" });
+      if (!g) falsePositives.push({ term: p.c.term, label: p.c.category, slot: p.slot, at: p.at, reason: s?.info.reason ?? "" });
       continue;
     }
     const said = saidAt.get(g);
@@ -295,7 +295,7 @@ async function main(): Promise<number> {
     Object.assign(row, {
       found: true,
       asSpotted: p.c.term,
-      label: p.c.label,
+      label: p.c.category,
       slot: p.slot,
       delay: said ? p.at - said.end : undefined,
       finalDelay: said && arrived !== undefined ? arrived - said.end : undefined,
@@ -311,7 +311,7 @@ async function main(): Promise<number> {
   const explainReady = found.map((r) => r.explainReadyAfterKey).filter((d): d is number => d !== undefined);
 
   console.log(`\nREPORT (${textMode ? "text replay" : "real audio"}, spotter ${spotterLlm.describe()}, interval ${intervalMs} ms, listener "${listener.knows}")`);
-  console.log(`   glossary term       key  spotted as             label          speech->key  (final + spot + queue)  explained after`);
+  console.log(`   glossary term       key  spotted as             category       speech->key  (final + spot + queue)  explained after`);
   for (const r of rows) {
     if (!r.found) {
       console.log(`   ${r.glossary.padEnd(18)}  --   MISSED`);

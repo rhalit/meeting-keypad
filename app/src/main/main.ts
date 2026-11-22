@@ -16,6 +16,7 @@ import {
   type LlmClient,
 } from "../pipeline/llm.js";
 import { Explainer } from "../pipeline/explainer.js";
+import { LatencyTracker, formatLatency } from "../pipeline/latency.js";
 import { TermSpotter, type SpotInfo } from "../pipeline/termSpotter.js";
 import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
 import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
@@ -26,7 +27,7 @@ import { SaveController, fileSavedIdeas } from "../pipeline/save.js";
 import { SlotManager } from "../pipeline/slots.js";
 import { SttError, deepgramFactory, loadSttConfig, parseKeyterms, sttAdvice, type SttFactory } from "../pipeline/stt.js";
 import type { TermCandidate } from "../pipeline/terms.js";
-import { TranscriptBuffer } from "../pipeline/transcriptBuffer.js";
+import { TranscriptBuffer, type TranscriptLine } from "../pipeline/transcriptBuffer.js";
 import { OverlayWindow } from "./overlayWindow.js";
 import type { PanelCommand, PanelLine, PanelLlm, PanelMode, PanelSnapshot } from "./panelTypes.js";
 
@@ -200,9 +201,17 @@ slots.on("change", (keys: KeyState[]) => {
   pushSnapshot();
 });
 
+// Speech -> key delay per live term (Deepgram word timestamps), logged when the term reaches a key.
+const latency = new LatencyTracker();
+/** When each live line became final (meeting seconds). */
+const lineFinalAt = new WeakMap<TranscriptLine, number>();
+
 // A live term just landed on a key: write its explanation now, so it is ready before the press.
 slots.on("placed", ({ candidate }: { slot: number; candidate: TermCandidate }) => {
-  if (candidate.source === "live") explainer.prefetch(candidate.term);
+  if (candidate.source !== "live") return;
+  explainer.prefetch(candidate);
+  const r = latency.placed(candidate.term, liveSource.position());
+  if (r) log(formatLatency(r));
 });
 
 /** A spoken line from either source (mock: with terms; live: finals, terms come from the spotter). */
@@ -221,6 +230,7 @@ function resetMeeting(why: string): void {
   saver.reset();
   spotter.reset();
   explainer.reset();
+  latency.reset();
   overlay.hide("restart");
   slots.reset();
   transcript.clear();
@@ -239,12 +249,15 @@ mockSource.on("state", pushSnapshot);
 mockSource.on("end", () => log("meeting finished"));
 
 liveSource.on("line", (line: LiveLine) => {
+  lineFinalAt.set(line, liveSource.position());
+  if (line.reason === "length") log(`(line cut at ${line.text.split(/\s+/).length} words / ${((line.end ?? line.t) - line.t).toFixed(1)} s)`);
   onLine(line);
   if (mode === "live") spotter.addLine(line);
 });
 spotter.on("term", (c: TermCandidate, info: SpotInfo) => {
-  log(`term "${c.term}" (${c.category}, ${c.source}) label ${JSON.stringify(c.label)}`);
-  explainer.noteHeard(c, info.line, info.context);
+  log(`term "${c.term}" (${c.category}, ${c.source})`);
+  explainer.noteHeard(c, info.line, info.context, info.heard);
+  latency.spot(c.term, liveSource.position(), info.spokenAt, lineFinalAt.get(info.line));
   if (!learnedKeyterms.some((k) => k.toLowerCase() === c.term.toLowerCase())) learnedKeyterms.push(c.term);
   slots.add(c);
 });

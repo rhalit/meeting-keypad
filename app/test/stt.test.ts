@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket as ServerSocket } from "ws";
 import { realClock } from "../src/pipeline/clock.js";
 import {
+  type RawSttEntry,
   BYTES_PER_SECOND,
   DeepgramAssembler,
   DeepgramStt,
@@ -94,7 +95,7 @@ describe("DeepgramAssembler", () => {
     const a = new DeepgramAssembler();
     expect(a.results(results("hello"), 0)).toEqual({ interim: expect.objectContaining({ text: "hello" }) });
     expect(a.results(results("hello there", { is_final: true, speech_final: true, start: 0.5, duration: 1.2 }), 10)).toEqual({
-      final: { text: "hello there", speaker: undefined, start: 10.5, end: 11.7 },
+      final: { text: "hello there", speaker: undefined, start: 10.5, end: 11.7, words: [], reason: "speech_final" },
     });
     expect(a.flush()).toBeNull();
   });
@@ -123,12 +124,81 @@ describe("DeepgramAssembler", () => {
       }),
       5,
     );
-    expect(r.final).toEqual({ text: "a b c", speaker: "Speaker 2", start: 5.2, end: 5.9 });
+    expect(r.final).toEqual({
+      text: "a b c",
+      speaker: "Speaker 2",
+      start: 5.2,
+      end: 5.9,
+      words: [
+        { text: "a", start: 5.2, end: 5.4 },
+        { text: "b", start: 5.5, end: 5.7 },
+        { text: "c", start: 5.8, end: 5.9 },
+      ],
+      reason: "speech_final",
+    });
   });
 
   it("ignores empty finals", () => {
     const a = new DeepgramAssembler();
     expect(a.results(results("", { is_final: true, speech_final: true }), 0)).toEqual({});
+  });
+
+  describe("long lines (monologue without pauses)", () => {
+    /** An is_final piece of `n` words, 0.3 s each, starting at `start`. */
+    function piece(n: number, start: number, prefix = "w") {
+      const text = Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(" ");
+      const words = Array.from({ length: n }, (_, i) => ({ start: start + i * 0.3, end: start + i * 0.3 + 0.25 }));
+      return results(text, { is_final: true, start, duration: n * 0.3, words });
+    }
+
+    it("ends the line at the first is_final boundary once it has >= 12 words", () => {
+      const a = new DeepgramAssembler();
+      expect(a.results(piece(5, 0, "a"), 0).final).toBeUndefined();
+      expect(a.results(piece(5, 1.5, "b"), 0).final).toBeUndefined(); // 10 words, 2.7 s
+      const r = a.results(piece(3, 3, "c"), 0); // 13 words
+      expect(r.final).toMatchObject({ reason: "length", start: 0 });
+      expect(r.final!.words).toHaveLength(13);
+      expect(r.final!.text.split(" ")).toHaveLength(13);
+      expect(a.flush()).toBeNull();
+    });
+
+    it("ends the line once it has >= 6 s of speech, even with few words", () => {
+      const a = new DeepgramAssembler();
+      const slow = (text: string, start: number, end: number) =>
+        results(text, { is_final: true, start, duration: end - start, words: [{ start, end }] });
+      expect(a.results(slow("one", 0, 2), 0).final).toBeUndefined();
+      expect(a.results(slow("two", 2.5, 5.9), 0).final).toBeUndefined(); // 5.9 s
+      expect(a.results(slow("three", 6, 6.5), 0).final).toMatchObject({ text: "one two three", reason: "length", start: 0, end: 6.5 });
+    });
+
+    it("never splits inside an is_final piece: a 20-word piece stays one line", () => {
+      const a = new DeepgramAssembler();
+      const r = a.results(piece(20, 0), 0);
+      expect(r.final?.words).toHaveLength(20);
+      expect(r.final?.reason).toBe("length");
+    });
+
+    it("still ends at speech_final and UtteranceEnd before the limits", () => {
+      const a = new DeepgramAssembler();
+      const sf = results("short one", { is_final: true, speech_final: true, start: 0, duration: 1 });
+      expect(a.results(sf, 0).final).toMatchObject({ text: "short one", reason: "speech_final" });
+      a.results(piece(4, 2), 0);
+      expect(a.utteranceEnd()).toMatchObject({ reason: "utterance_end" });
+      a.results(piece(4, 4), 0);
+      expect(a.flush()).toMatchObject({ reason: "flush" });
+    });
+
+    it("uses the configured limits", () => {
+      const a = new DeepgramAssembler({ maxLineWords: 4, maxLineS: 100 });
+      expect(a.results(piece(3, 0), 0).final).toBeUndefined();
+      expect(a.results(piece(2, 1), 0).final?.words).toHaveLength(5);
+    });
+
+    it("the interim after a cut starts fresh", () => {
+      const a = new DeepgramAssembler();
+      a.results(piece(12, 0, "x"), 0);
+      expect(a.results(results("next words"), 0).interim?.text).toBe("next words");
+    });
   });
 });
 
@@ -216,6 +286,23 @@ describe("DeepgramStt against a local server", () => {
     expect(states[states.length - 1]).toBe("closed");
     expect(logs.join("\n")).not.toContain(KEY);
     stt = null;
+  });
+
+  it("hands every Deepgram text message and the connect to onRaw (the recorder), with the offset", async () => {
+    const srv = await server();
+    const raw: RawSttEntry[] = [];
+    const cfg: DeepgramConfig = { ...loadSttConfig({ DEEPGRAM_API_KEY: KEY }), baseUrl: `ws://127.0.0.1:${srv.port}/v1/listen` };
+    stt = new DeepgramStt(cfg, { keyterms: [] }, { clock: realClock, log: () => {}, onRaw: (e) => raw.push(e) });
+    stt.start();
+    await until(() => stt!.status().state === "open");
+    stt.send(Buffer.alloc(BYTES_PER_SECOND / 10));
+    await until(() => srv.binary.length === 1);
+    const msg = JSON.stringify(results("hello", { is_final: true, speech_final: true }));
+    srv.sockets[0].send(msg);
+    await until(() => raw.some((e) => e.msg === msg));
+    expect(raw[0]).toMatchObject({ type: "connect" });
+    expect(raw.find((e) => e.msg === msg)).toMatchObject({ offset: 0 });
+    expect(JSON.stringify(raw)).not.toContain(KEY);
   });
 
   it("keeps the session time base across a reconnect", async () => {

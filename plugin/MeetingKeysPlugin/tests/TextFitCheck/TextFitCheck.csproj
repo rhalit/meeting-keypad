@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Checks for the plugin's TextFit (pure code, no SDK). Run: dotnet run (exit code 1 on a failure).
+       Not part of MeetingKeysPlugin.slnx, so the normal plugin build is unchanged. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Loupedeck.MeetingKeysPlugin.Checks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/Core/TextFit.cs" Link="TextFit.cs" />
+  </ItemGroup>
+
+</Project>
