@@ -5,6 +5,14 @@ A compact macOS companion for meetings and lectures, built around the **Logitech
 spoken and puts each term on a key. Pressing a key shows a plain-language explanation; the bottom row catches you
 up, saves ideas or tells you when a question is for you.
 
+## 🏆 Awards
+
+**2nd place at LauzHack 2026** in three tracks:
+
+- **Logitech track**
+- **Nexthink track**
+- **IMC Trading track**
+
 Architecture, rules and commands for contributors: [`CLAUDE.md`](CLAUDE.md). Plugin ↔ app contract:
 [`protocol/messages.md`](protocol/messages.md).
 
