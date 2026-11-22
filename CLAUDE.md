@@ -58,8 +58,8 @@ slot 8 `alert`, pulsing `#E5484D`/`#9E2A2F` every 600 ms, stops after 90 s (card
 suggested reply ("N questions" when more wait) and restores the key. The name and aliases are always Deepgram keyterms.
 `MeetingExporter` (`exportMeeting.ts`) writes `output/meetings/<YYYY-MM-DD HHmm>.md` (title, date, duration, 5-bullet
 summary (one call, skipped < 30 s said, reused when nothing new), questions, saved ideas, terms with explanations in order
-(opened marked), catch-ups, transcript). Runs on the panel button, Stop listening and the end of the mock meeting (each
-reveals the file in Finder) and silently on a Mock/Live switch. `MeetingRecord` (`meetingRecord.ts`) keeps start time,
+(opened marked), catch-ups, transcript). Runs on the panel button and Stop listening (each
+reveals the file in Finder), and silently at the end of the mock meeting and on a Mock/Live switch. `MeetingRecord` (`meetingRecord.ts`) keeps start time,
 spoken seconds and the terms that reached a key.
 Education mode: panel switch Meeting / Education (`usage`, separate from Mock / Live). Education bottom row:
 6 Flashcard (`FlashcardController`, `education.ts`, appends to `output/flashcards.csv`, Anki CSV), 7 Quiz me

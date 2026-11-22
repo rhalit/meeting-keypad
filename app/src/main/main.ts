@@ -496,7 +496,7 @@ mockSource.on("state", () => {
 });
 mockSource.on("end", () => {
   log("meeting finished");
-  exportMeeting("end of the mock meeting", true);
+  exportMeeting("end of the mock meeting", false); // silently: no Finder window
 });
 
 liveSource.on("line", (line: LiveLine) => {
@@ -712,7 +712,7 @@ function setExportStatus(s: PanelExport): void {
   pushSnapshot();
 }
 
-/** Writes the export; `reveal` shows it in Finder (button, Stop listening, end of the mock meeting). */
+/** Writes the export; `reveal` shows it in Finder (button, Stop listening). */
 function exportMeeting(why: string, reveal: boolean): void {
   const snap = meetingSnapshot();
   if (snap.lines.length === 0) {
