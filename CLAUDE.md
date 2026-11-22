@@ -69,7 +69,12 @@ switches the layout; For-me still runs (away pulse) but does not draw slot 8 in 
 lists the scenarios `{id, title, usage, path}` (path relative to `mock/`, "." = the default meeting); Settings → Scenario
 picks one per mode (`mockSource.load`, saved in settings). New scenario = a folder with `meeting.json` + `glossary.json`
 following the same rules as the default (checked by `test/mockScenarios.test.ts`) and an index entry.
-Panel Settings (⚙): Source, Mode, Scenario, Theme (panel + overlay card), key backgrounds (protocol `bg`, the plugin
+UI (app name IntelliPad): a compact 360×640 companion window with a native inset title bar. Toolbar (session + time,
+Export ⌘E, Settings ⌘,), transport (mock: play / restart / progress / speed; live: Listen / topic / level), a small
+keypad mirror, notices only when needed, the transcript grouped by speaker (lines naming the listener get an accent
+rule), a one-line status bar (Keypad · Model · Camera). Shortcuts: Space play / listen, ⌘1 / ⌘2 mode, ⌘L Mock / Live.
+One accent (#2B9BFF); red only for listening and alerts; hairline separators, no cards.
+Meeting / Education switch above the keypad mirror (main window). Panel Settings (⌘,): Source, Scenario, Theme (panel + overlay card), key backgrounds (protocol `bg`, the plugin
 switches to dark text on light colours); stored in Electron userData `settings.json` (`settings.ts`).
 Camera focus: `GazeClient` (`app/src/pipeline/gazeSource.ts`) reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`,
 MX Brio), `FocusTracker` (`focus.ts`) turns it into focused / away (debounced) and away periods. Back from away →

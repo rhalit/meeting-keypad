@@ -3,102 +3,151 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
-    <title>Meeting Keypad</title>
+    <title>IntelliPad</title>
     <link rel="stylesheet" href="panel.css" />
   </head>
   <body>
-    <header>
-      <div class="topbar">
-        <span id="summary" class="summary">Mock · Meeting</span>
-        <button id="settings-btn" title="Source, mode, theme and key colours">⚙ Settings</button>
+    <!-- Title bar: the macOS window buttons sit in its left inset; the bar drags the window. -->
+    <header class="toolbar">
+      <div class="session">
+        <span id="state-dot" class="state-dot" aria-hidden="true"></span>
+        <span id="summary" class="session-title">IntelliPad</span>
       </div>
-      <section id="settings" class="settings" hidden>
-        <div class="setting">
-          <span class="setting-name">Source</span>
-          <div class="modes" role="tablist">
+      <span id="time" class="time">0:00</span>
+      <button id="export" class="icon-btn" title="Export meeting notes (⌘E)" aria-label="Export meeting notes">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M5.25 5.25 8 2.5l2.75 2.75M3.5 9v3.25c0 .55.45 1 1 1h7c.55 0 1-.45 1-1V9" /></svg>
+      </button>
+      <button id="settings-btn" class="icon-btn" title="Settings (⌘,)" aria-label="Settings" aria-expanded="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h5M10.5 4.5h3M2.5 11.5h2M7.5 11.5h6" /><circle cx="9" cy="4.5" r="1.5" /><circle cx="6" cy="11.5" r="1.5" /></svg>
+      </button>
+    </header>
+
+    <!-- Transport: mock playback or live listening. -->
+    <section id="mock-controls" class="transport">
+      <button id="play" class="round-btn" title="Play (Space)" aria-label="Play">
+        <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M5 3.2v9.6c0 .4.44.64.77.42l7.2-4.8a.5.5 0 0 0 0-.84l-7.2-4.8A.5.5 0 0 0 5 3.2Z" /></svg>
+        <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect class="fill" x="4" y="3" width="2.75" height="10" rx=".6" /><rect class="fill" x="9.25" y="3" width="2.75" height="10" rx=".6" /></svg>
+      </button>
+      <button id="restart" class="icon-btn" title="Restart" aria-label="Restart">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.25 8a4.75 4.75 0 1 0 1.4-3.37M3.25 2.75v2.5h2.5" /></svg>
+      </button>
+      <div class="progress" title="Position in the mock meeting"><div id="progress-fill"></div></div>
+      <span id="mock-time" class="time">0:00 / 0:00</span>
+      <div class="segmented small" role="group" aria-label="Speed">
+        <button id="speed1" class="active">1×</button><button id="speed2">2×</button>
+      </div>
+    </section>
+
+    <section id="live-controls" class="transport live" hidden>
+      <button id="listen" class="listen-btn" title="Start listening (Space)">
+        <span class="rec" aria-hidden="true"></span><span id="listen-label">Listen</span>
+      </button>
+      <input id="keyterms" type="text" placeholder="Topic or keyterms" spellcheck="false" title="Helps speech-to-text with names and jargon. Used at the next start." />
+      <div class="meter" title="System audio level"><div id="meter-fill"></div></div>
+    </section>
+    <div id="live-hint" class="hint" hidden>
+      <span id="audio-text">Audio off</span>
+      <span id="learned" hidden></span>
+    </div>
+
+    <!-- Keypad mirror: what the 9 physical keys show right now. -->
+    <section class="keys">
+      <!-- Mode: decides what the bottom row of keys does. -->
+      <div class="segmented mode-switch" role="group" aria-label="Mode">
+        <button id="usage-meeting" class="active" title="Meeting: Catch-up · Save · For me? (⌘1)">Meeting</button><button id="usage-education" title="Education: Flashcard · Quiz me · Explain simply (⌘2)">Education</button>
+      </div>
+      <div id="grid" class="grid" aria-label="Keypad"></div>
+      <div id="queue" class="queue"></div>
+    </section>
+
+    <!-- Notices: only when something needs attention. -->
+    <div id="notices" class="notices">
+      <div id="mention-note" class="notice alert" hidden></div>
+      <div id="missed-note" class="notice accent" hidden></div>
+      <div id="llm-error" class="notice error" hidden></div>
+      <div id="live-error" class="notice error" hidden></div>
+    </div>
+
+    <main id="transcript" class="transcript" aria-live="polite">
+      <div id="empty" class="empty">Press <kbd>Space</kbd> to play the mock meeting.</div>
+    </main>
+
+    <!-- One-line status. Details are in Settings → Diagnostics and in the tooltips. -->
+    <footer class="statusbar">
+      <span id="plugin" class="status-item" title="Logitech MX Keypad plugin">Keypad</span>
+      <span id="llm" class="status-item" title="Model">Model</span>
+      <span id="focus-pill" class="status-item" title="Camera focus (Logi Gaze Tracker)">Camera</span>
+      <span id="export-text" class="status-note"></span>
+    </footer>
+
+    <!-- Settings sheet (⌘,): configuration, camera, testing tools, diagnostics. -->
+    <aside id="settings" class="sheet" hidden aria-label="Settings">
+      <div class="sheet-body">
+        <h3>Session</h3>
+        <div class="row">
+          <span class="row-label">Source</span>
+          <div class="segmented" role="group" aria-label="Source">
             <button id="mode-mock" class="active">Mock</button><button id="mode-live">Live</button>
           </div>
         </div>
-        <div class="setting">
-          <span class="setting-name">Mode</span>
-          <div class="modes" role="tablist" title="Meeting: Catch-up · Save · For me?   Education: Flashcard · Quiz me · Explain simply">
-            <button id="usage-meeting" class="active">Meeting</button><button id="usage-education">Education</button>
-          </div>
-        </div>
-        <div class="setting">
-          <span class="setting-name">Scenario</span>
+        <div class="row">
+          <span class="row-label">Scenario</span>
           <select id="scenario" title="Mock content for this mode"></select>
         </div>
-        <div class="setting">
-          <span class="setting-name">Theme</span>
-          <div class="modes" role="tablist">
+
+        <h3>Appearance</h3>
+        <div class="row">
+          <span class="row-label">Theme</span>
+          <div class="segmented" role="group" aria-label="Theme">
             <button id="theme-dark" class="active">Dark</button><button id="theme-light">Light</button>
           </div>
         </div>
-        <div class="setting top">
-          <span class="setting-name">Key backgrounds</span>
-          <div class="colors">
-            <label class="color"><input id="bg-terms" type="color" value="#000000" /><span>Term keys (1–6)</span></label>
-            <label class="color"><input id="bg-6" type="color" value="#000000" /><span id="bg-6-name">Bottom left</span></label>
-            <label class="color"><input id="bg-7" type="color" value="#000000" /><span id="bg-7-name">Bottom middle</span></label>
-            <label class="color"><input id="bg-8" type="color" value="#000000" /><span id="bg-8-name">Bottom right</span></label>
-            <button id="bg-reset">Reset to black</button>
+        <div class="row top">
+          <span class="row-label">Keypad colours</span>
+          <div class="swatches">
+            <label class="swatch" title="Term keys (1–6)"><input id="bg-terms" type="color" value="#000000" /><span>Terms</span></label>
+            <label class="swatch"><input id="bg-6" type="color" value="#000000" /><span id="bg-6-name">Left</span></label>
+            <label class="swatch"><input id="bg-7" type="color" value="#000000" /><span id="bg-7-name">Middle</span></label>
+            <label class="swatch"><input id="bg-8" type="color" value="#000000" /><span id="bg-8-name">Right</span></label>
           </div>
         </div>
-      </section>
-      <div id="mock-controls" class="controls">
-        <button id="play" class="primary">Play</button>
-        <button id="restart">Restart</button>
-        <span class="speed">
-          <button id="speed1" class="active">1x</button><button id="speed2">2x</button>
-        </span>
-      </div>
-      <div id="live-controls" class="live" hidden>
-        <div class="controls">
-          <button id="listen" class="primary">Start listening</button>
-          <input id="keyterms" type="text" placeholder="Meeting topic / keyterms, comma-separated" spellcheck="false" />
+        <div class="row end"><button id="bg-reset" class="text-btn">Reset to black</button></div>
+
+        <h3>Camera</h3>
+        <div class="row">
+          <span id="camera-text" class="row-value">Camera off</span>
+          <button id="gaze-calibrate" class="btn">Calibrate</button>
         </div>
-        <div class="audio-row">
-          <div class="meter" title="System audio level"><div id="meter-fill"></div></div>
-          <span id="audio-text">Audio: off</span>
+        <p id="camera-error" class="row-note" hidden></p>
+
+        <h3>Testing</h3>
+        <div class="row">
+          <span class="row-label">Pretend you looked away</span>
+          <button id="sim-away" class="btn">Simulate away</button>
         </div>
-        <div class="status"><span id="stt-text">Speech-to-text: idle</span></div>
-        <div class="status"><span id="spotter-text">Spotter: idle</span></div>
-        <div id="learned" class="learned" hidden></div>
-        <div id="live-error" class="llm-banner" hidden></div>
-      </div>
-      <div class="status">
-        <span id="time">0:00 / 0:00</span>
-        <span id="plugin">Keypad not connected</span>
-      </div>
-      <div class="status"><span id="llm" class="llm-checking">Model: checking…</span></div>
-      <div class="status export-row">
-        <span id="export-text"></span>
-        <button id="export" title="Write output/meetings/&lt;date time&gt;.md and show it in Finder">Export meeting</button>
-      </div>
-      <div id="llm-error" class="llm-banner" hidden></div>
-      <div class="camera">
-        <div class="status">
-          <span id="camera-text">Camera: off</span>
-          <span id="focus-pill" class="pill">Focus: unknown</span>
+        <div class="row">
+          <span class="row-label">A question for you</span>
+          <button id="sim-mention" class="btn" title="Sends a line naming you through the real For-me check (one model call)">Simulate</button>
         </div>
-        <div class="controls">
-          <button id="sim-away">Simulate away</button>
-          <button id="sim-mention">Simulate mention</button>
-          <button id="gaze-calibrate">Calibrate gaze</button>
-        </div>
-        <div id="camera-error" class="llm-banner" hidden></div>
+
+        <h3>Diagnostics</h3>
+        <dl class="diag">
+          <dt>Model</dt><dd id="diag-llm">–</dd>
+          <dt>Speech</dt><dd id="stt-text">–</dd>
+          <dt>Spotter</dt><dd id="spotter-text">–</dd>
+        </dl>
+
+        <h3>Shortcuts</h3>
+        <dl class="shortcuts">
+          <dt><kbd>Space</kbd></dt><dd>Play / pause, or listen / stop</dd>
+          <dt><kbd>⌘</kbd><kbd>1</kbd> <kbd>⌘</kbd><kbd>2</kbd></dt><dd>Meeting / Education</dd>
+          <dt><kbd>⌘</kbd><kbd>L</kbd></dt><dd>Switch Mock / Live</dd>
+          <dt><kbd>⌘</kbd><kbd>E</kbd></dt><dd>Export meeting notes</dd>
+          <dt><kbd>⌘</kbd><kbd>,</kbd></dt><dd>Settings</dd>
+        </dl>
       </div>
-    </header>
-    <section>
-      <h2>Keypad</h2>
-      <div id="grid" class="grid"></div>
-      <div id="queue" class="queue"></div>
-    </section>
-    <section class="grow">
-      <h2>Transcript</h2>
-      <div id="transcript" class="transcript"></div>
-    </section>
+    </aside>
+
     <script src="../dist/renderer/panel.js"></script>
   </body>
 </html>

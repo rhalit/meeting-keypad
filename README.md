@@ -1,4 +1,4 @@
-# Meeting Keypad
+# IntelliPad (Meeting Keypad)
 
 A macOS app that listens to a meeting, spots jargon as it is spoken and shows each term on a key of the
 Logitech MX Keypad. Pressing a term key opens a card with a plain explanation. See `CLAUDE.md` for the
@@ -31,8 +31,9 @@ The panel switches between two layouts (keys 0–5 always show terms):
   `output/flashcards.csv`, ready for Anki: File → Import) · **Quiz me** (a 3-choice question on the last 3 min;
   press again for the answer) · **Explain simply** (the last 2 min in plain words with an example).
 
-Everything is in the panel's **⚙ Settings**: Source (Mock / Live), Mode (Meeting / Education), **Scenario** (mock content
-for the mode), Theme (Dark / Light) and the key background colours. Choices are remembered between runs.
+The **Meeting / Education** switch sits above the keypad mirror in the main window (⌘1 / ⌘2). The panel's **Settings**
+(⌘,) holds Source (Mock / Live), **Scenario** (mock content for the mode), Theme (Dark / Light) and the keypad colours.
+Choices are remembered between runs.
 
 Mock scenarios (`mock/scenarios/index.json`):
 

@@ -664,6 +664,7 @@ ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
     case "theme-light": {
       const theme = cmd === "theme-light" ? "light" : "dark";
       overlayWindow?.setTheme(theme);
+      panel?.setBackgroundColor(panelBackground(theme));
       updateSettings({ ...settings, theme });
       break;
     }
@@ -707,14 +708,22 @@ ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
   }
 });
 
+/** Window background behind the page (shown while resizing): same as --bg in panel.css. */
+function panelBackground(theme: "dark" | "light"): string {
+  return theme === "light" ? "#F7F7F8" : "#1C1C1E";
+}
+
 function createPanel(): void {
+  // Compact companion window next to the meeting: native title bar inset into the toolbar (panel.css).
   panel = new BrowserWindow({
-    width: 460,
-    height: 760,
-    minWidth: 380,
-    minHeight: 520,
-    title: "Meeting Keypad",
-    backgroundColor: settings.theme === "light" ? "#F6F8FA" : "#0D1117",
+    width: 360,
+    height: 640,
+    minWidth: 320,
+    minHeight: 460,
+    title: "IntelliPad",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 13, y: 12 },
+    backgroundColor: panelBackground(settings.theme),
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -742,7 +751,7 @@ app.whenReady().then(async () => {
           `To see what holds the port: lsof -nP -iTCP:${DEFAULT_PORT} -sTCP:LISTEN`
         : `Could not start the keypad server: ${(err as Error).message}`;
     console.error(`\nERROR: ${msg}\n`);
-    dialog.showErrorBox("Meeting Keypad", msg);
+    dialog.showErrorBox("IntelliPad", msg);
     app.exit(1);
     return;
   }

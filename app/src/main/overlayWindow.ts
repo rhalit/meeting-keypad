@@ -49,7 +49,7 @@ export class OverlayWindow {
       maximizable: false,
       fullscreenable: false,
       alwaysOnTop: true,
-      title: "Meeting Keypad overlay",
+      title: "IntelliPad card",
       webPreferences: {
         preload: join(__dirname, "overlayPreload.js"),
         contextIsolation: true,

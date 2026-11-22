@@ -1,4 +1,4 @@
-// Control panel. Plain browser script (no imports): shapes mirror src/main/panelTypes.ts.
+// IntelliPad companion window. Plain browser script (no imports): shapes mirror src/main/panelTypes.ts.
 
 interface PanelKey {
   slot: number;
@@ -83,53 +83,107 @@ interface Window {
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+const send = (cmd: string, arg?: string) => window.keypad.control(cmd, arg);
 
+// --- elements ---------------------------------------------------------------------------------------
+
+const stateDot = $("state-dot");
+const summaryEl = $("summary");
+const timeEl = $("time");
+const mockTimeEl = $("mock-time");
+const exportBtn = $<HTMLButtonElement>("export");
+const settingsBtn = $<HTMLButtonElement>("settings-btn");
+const settingsEl = $("settings");
+
+const mockControls = $("mock-controls");
 const playBtn = $<HTMLButtonElement>("play");
 const restartBtn = $<HTMLButtonElement>("restart");
+const progressFill = $("progress-fill");
 const speed1Btn = $<HTMLButtonElement>("speed1");
 const speed2Btn = $<HTMLButtonElement>("speed2");
-const timeEl = $("time");
-const pluginEl = $("plugin");
-const llmEl = $("llm");
-const llmErrorEl = $("llm-error");
-const gridEl = $("grid");
-const queueEl = $("queue");
-const transcriptEl = $("transcript");
-const modeMockBtn = $<HTMLButtonElement>("mode-mock");
-const usageMeetingBtn = $<HTMLButtonElement>("usage-meeting");
-const usageEducationBtn = $<HTMLButtonElement>("usage-education");
-const modeLiveBtn = $<HTMLButtonElement>("mode-live");
-const mockControls = $("mock-controls");
+
 const liveControls = $("live-controls");
 const listenBtn = $<HTMLButtonElement>("listen");
+const listenLabel = $("listen-label");
 const keytermsEl = $<HTMLInputElement>("keyterms");
 const meterFill = $("meter-fill");
+const liveHint = $("live-hint");
 const audioText = $("audio-text");
-const sttText = $("stt-text");
-const liveError = $("live-error");
-const cameraText = $("camera-text");
-const focusPill = $("focus-pill");
-const cameraError = $("camera-error");
-const simAwayBtn = $<HTMLButtonElement>("sim-away");
-const simMentionBtn = $<HTMLButtonElement>("sim-mention");
-const calibrateBtn = $<HTMLButtonElement>("gaze-calibrate");
-let simAway = false;
-const spotterText = $("spotter-text");
 const learnedEl = $("learned");
-const exportBtn = $<HTMLButtonElement>("export");
+
+const gridEl = $("grid");
+const queueEl = $("queue");
+const mentionNote = $("mention-note");
+const missedNote = $("missed-note");
+const llmErrorEl = $("llm-error");
+const liveError = $("live-error");
+const transcriptEl = $("transcript");
+const emptyEl = $("empty");
+
+const pluginEl = $("plugin");
+const llmEl = $("llm");
+const focusEl = $("focus-pill");
 const exportText = $("export-text");
 
+const modeMockBtn = $<HTMLButtonElement>("mode-mock");
+const modeLiveBtn = $<HTMLButtonElement>("mode-live");
+const usageMeetingBtn = $<HTMLButtonElement>("usage-meeting");
+const usageEducationBtn = $<HTMLButtonElement>("usage-education");
+const scenarioEl = $<HTMLSelectElement>("scenario");
+const themeDarkBtn = $<HTMLButtonElement>("theme-dark");
+const themeLightBtn = $<HTMLButtonElement>("theme-light");
+const bgResetBtn = $<HTMLButtonElement>("bg-reset");
+const cameraText = $("camera-text");
+const cameraError = $("camera-error");
+const calibrateBtn = $<HTMLButtonElement>("gaze-calibrate");
+const simAwayBtn = $<HTMLButtonElement>("sim-away");
+const simMentionBtn = $<HTMLButtonElement>("sim-mention");
+const diagLlm = $("diag-llm");
+const sttText = $("stt-text");
+const spotterText = $("spotter-text");
+
+const BG_TARGETS = ["terms", "6", "7", "8"] as const;
+const bgInputs = BG_TARGETS.map((t) => $<HTMLInputElement>(`bg-${t}`));
+const BOTTOM_NAMES = {
+  meeting: ["Catch-up", "Save", "For me?"],
+  education: ["Flashcard", "Quiz me", "Explain simply"],
+};
+
+// --- state ------------------------------------------------------------------------------------------
+
+let snap: PanelSnapshotMsg | null = null;
 let playing = false;
 let mode: "mock" | "live" = "mock";
 let listening = false;
+let simAway = false;
 let keytermsTouched = false;
 let lastLoudAt = 0;
 let audioState = "stopped";
-let audioStatusText = "Audio: off";
+let audioStatusText = "Audio off";
 let interimEl: HTMLElement | null = null;
+let scenarioKey = "";
+/** The listener's name (mock/config.json), to mark the lines that address them. */
+let listenerRe: RegExp | null = null;
+/** The speaker block new lines are appended to (consecutive lines of one speaker share a header). */
+let lastTurn: { el: HTMLElement; speaker: string } | null = null;
 
 const AUDIO_OK = ["running", "silent"];
 const LOUD_DB = -50;
+const AWAY_REASON: Record<string, string> = { "no-face": "no face", "off-screen": "looking away", simulated: "simulated" };
+
+// --- rendering --------------------------------------------------------------------------------------
+
+/** Same rule as the plugin: relative luminance above 0.55 counts as a light background. */
+function isLight(hex: string): boolean {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.55;
+}
+
+function setStatus(el: HTMLElement, text: string, cls: string, title?: string): void {
+  if (el.textContent !== text) el.textContent = text;
+  el.className = `status-item${cls ? ` ${cls}` : ""}`;
+  if (title !== undefined) el.title = title;
+}
 
 function renderAudioText(): void {
   const receiving = listening && Date.now() - lastLoudAt < 1500;
@@ -138,92 +192,133 @@ function renderAudioText(): void {
     audioText.className = "ok";
     return;
   }
-  audioText.textContent = audioState === "running" ? "Audio: capturing, silence" : audioStatusText;
+  audioText.textContent = audioState === "running" ? "Capturing · silence" : audioStatusText.replace(/^Audio: /, "Audio ");
   audioText.className =
-    audioState === "running" || audioState === "stopped" || audioState === "starting"
-      ? ""
-      : audioState === "missing" || audioState === "error"
-        ? "err"
-        : "warn";
+    audioState === "running" || audioState === "stopped" || audioState === "starting" ? "" : audioState === "missing" || audioState === "error" ? "err" : "warn";
 }
 
-function renderLive(s: PanelSnapshotMsg): void {
+function renderToolbar(s: PanelSnapshotMsg): void {
+  const current = s.scenarios.find((x) => x.id === s.scenario);
+  const live = s.mode === "live";
+  // Short title in the bar ("Product sprint review"), the full one in the tooltip.
+  summaryEl.textContent = live
+    ? listening
+      ? "Listening"
+      : s.usage === "education"
+        ? "Live lecture"
+        : "Live meeting"
+    : (current?.title.replace(/\s*\(.*\)\s*$/, "") ?? "Mock");
+  summaryEl.title = `${live ? "Live" : "Mock"} · ${s.usage === "education" ? "Education" : "Meeting"}${!live && current ? ` · ${current.title}` : ""}`;
+  stateDot.className = `state-dot${live && listening ? " listening" : !live && playing ? " playing" : ""}`;
+  // Live: elapsed time in the bar. Mock: position / length sits next to the progress bar instead.
+  timeEl.hidden = !live;
+  timeEl.textContent = fmt(s.live.position);
+  mockTimeEl.textContent = `${fmt(s.playback.position)} / ${fmt(s.playback.duration)}`;
+  exportBtn.disabled = s.export.state === "busy";
+}
+
+function renderTransport(s: PanelSnapshotMsg): void {
+  mockControls.hidden = s.mode !== "mock";
+  liveControls.hidden = s.mode !== "live";
+  liveHint.hidden = s.mode !== "live";
+  // Mock
+  playBtn.classList.toggle("playing", playing);
+  playBtn.title = playing ? "Pause (Space)" : s.playback.ended ? "Play again (Space)" : "Play (Space)";
+  playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+  const pct = s.playback.duration > 0 ? Math.min(100, (s.playback.position / s.playback.duration) * 100) : 0;
+  progressFill.style.width = `${pct}%`;
+  speed1Btn.classList.toggle("active", s.playback.speed === 1);
+  speed2Btn.classList.toggle("active", s.playback.speed === 2);
+  // Live
   const l = s.live;
-  listening = l.listening;
-  listenBtn.textContent = listening ? "Stop listening" : "Start listening";
-  listenBtn.classList.toggle("stop", listening);
+  listenBtn.classList.toggle("on", listening);
+  listenLabel.textContent = listening ? "Stop" : "Listen";
+  listenBtn.title = listening ? "Stop listening (Space)" : l.configAdvice ? "Speech-to-text is not configured" : "Start listening (Space)";
   listenBtn.disabled = !listening && !!l.configAdvice;
   keytermsEl.disabled = listening;
   if (!keytermsTouched && document.activeElement !== keytermsEl) keytermsEl.value = l.keytermsText;
   audioState = l.audio.state;
   audioStatusText = l.audio.text;
   renderAudioText();
-  sttText.textContent = l.configAdvice ? "Speech-to-text: not configured" : l.stt.text;
-  sttText.className = l.configAdvice || l.stt.state === "error" ? "err" : l.stt.state === "open" ? "ok" : listening ? "wait" : "";
-  const advice = l.configAdvice ?? l.stt.advice ?? (listening || l.audio.state === "missing" ? l.audio.advice : undefined);
-  liveError.hidden = !advice;
-  liveError.textContent = advice ?? "";
-  spotterText.textContent = l.spotter.text;
-  spotterText.className = l.spotter.state === "error" ? "err" : l.spotter.state === "backoff" ? "warn" : l.spotter.state === "ok" ? "ok" : "";
-  spotterText.title = l.spotter.advice ?? "";
   learnedEl.hidden = l.learnedKeyterms.length === 0;
-  learnedEl.textContent = `Learned keyterms (used at next Start): ${l.learnedKeyterms.join(", ")}`;
+  learnedEl.textContent = `Learned: ${l.learnedKeyterms.join(", ")}`;
+  learnedEl.title = "Added to speech-to-text keyterms at the next start";
   if (!listening) meterFill.style.width = "0";
 }
 
-const AWAY_REASON: Record<string, string> = { "no-face": "no face", "off-screen": "looking away", simulated: "simulated" };
+function renderKeys(s: PanelSnapshotMsg): void {
+  gridEl.replaceChildren(
+    ...s.keys.map((k) => {
+      const key = document.createElement("div");
+      key.className = `key state-${k.state}`;
+      if (k.color && k.state !== "empty" && k.state !== "alert") key.style.setProperty("--cat", k.color);
+      if (k.bg && k.state !== "alert" && k.state !== "empty") {
+        key.style.background = k.bg;
+        key.classList.add(isLight(k.bg) ? "custom-dark" : "custom-light");
+      }
+      key.title = k.term ? `${k.term}${k.sub ? ` · ${k.sub}` : ""}${k.state === "seen" ? " · opened" : ""}` : k.slot < 6 ? `Key ${k.slot + 1}: free` : k.label;
+      if (k.state !== "empty") {
+        if (k.sub) {
+          const cat = document.createElement("div");
+          cat.className = "cat";
+          cat.textContent = k.sub;
+          key.append(cat);
+        }
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = k.label;
+        // Bottom-row keys without a category may carry a label colour (Saved ✓, Missed 2m).
+        if (!k.sub && k.color && k.state !== "alert") label.style.color = k.color;
+        key.append(label);
+      }
+      return key;
+    }),
+  );
+  queueEl.textContent = s.queued.length ? `Up next: ${s.queued.join(", ")}` : "";
+}
 
-function renderFocus(f: PanelFocusMsg): void {
+function renderNotices(s: PanelSnapshotMsg): void {
+  const f = s.focus;
+  mentionNote.hidden = !f.mentionFlashing;
+  mentionNote.textContent = "A question for you · look back or press any key";
+  const summaryKey = s.usage === "education" ? "Explain simply" : "Catch-up";
+  missedNote.hidden = !f.missed;
+  missedNote.textContent = f.missed ? `You missed ${f.missed}. Press ${summaryKey} for a summary.` : "";
+  llmErrorEl.hidden = s.llm.state !== "error" || !s.llm.advice;
+  llmErrorEl.textContent = s.llm.advice ?? "";
+  const l = s.live;
+  const advice = s.mode === "live" ? (l.configAdvice ?? l.stt.advice ?? (listening || l.audio.state === "missing" ? l.audio.advice : undefined)) : undefined;
+  liveError.hidden = !advice;
+  liveError.textContent = advice ?? "";
+}
+
+function renderStatusbar(s: PanelSnapshotMsg): void {
+  const kp = s.pluginsConnected > 0;
+  setStatus(pluginEl, "Keypad", kp ? "ok" : "err", kp ? "MX Keypad connected" : "MX Keypad not connected: is the Logi Plugin Service running?");
+  setStatus(llmEl, "Model", s.llm.state === "ok" ? "ok" : s.llm.state === "error" ? "err" : "wait", s.llm.text);
+  const f = s.focus;
   const cam = f.camera;
-  cameraText.textContent = cam.text;
-  cameraText.className = cam.state === "tracking" ? "ok" : cam.state === "off" || cam.state === "connecting" ? "" : "warn";
-  cameraError.hidden = !cam.advice;
-  cameraError.textContent = cam.advice ?? "";
-  calibrateBtn.disabled = cam.state === "off" || cam.state === "connecting" || cam.state === "no-tracker";
-  const secs = fmt(f.forMs / 1000);
-  focusPill.className = `pill ${f.state}`;
-  focusPill.textContent =
-    f.state === "away"
-      ? `Away ${secs} · ${AWAY_REASON[f.reason ?? ""] ?? ""}${f.mentionFlashing ? " · mentioned!" : ""}`
-      : f.state === "focused"
-        ? `Focused${f.missed ? ` · missed ${f.missed}` : ""}`
-        : `Focus: unknown${f.missed ? ` · missed ${f.missed}` : ""}`;
-  simAway = f.simulated;
-  simAwayBtn.textContent = simAway ? "Stop simulating away" : "Simulate away";
-  simAwayBtn.classList.toggle("on", simAway);
+  if (f.state === "away") {
+    setStatus(focusEl, `Away ${fmt(f.forMs / 1000)}`, "away", `Away · ${AWAY_REASON[f.reason ?? ""] ?? ""}`);
+  } else if (f.state === "focused") {
+    setStatus(focusEl, "Focused", "ok", cam.text);
+  } else {
+    setStatus(focusEl, "Camera off", "", `${cam.text}${cam.advice ? `\n${cam.advice}` : ""}`);
+  }
+  exportText.textContent = s.export.text;
+  exportText.title = s.export.text;
+  exportText.className = `status-note ${s.export.state === "ok" ? "ok" : s.export.state === "error" ? "err" : s.export.state === "busy" ? "wait" : ""}`;
 }
-
-/** Same rule as the plugin: relative luminance above 0.55 counts as a light background. */
-function isLight(hex: string): boolean {
-  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.55;
-}
-
-const settingsBtn = $<HTMLButtonElement>("settings-btn");
-const settingsEl = $("settings");
-const summaryEl = $("summary");
-const themeDarkBtn = $<HTMLButtonElement>("theme-dark");
-const themeLightBtn = $<HTMLButtonElement>("theme-light");
-const bgResetBtn = $<HTMLButtonElement>("bg-reset");
-const scenarioEl = $<HTMLSelectElement>("scenario");
-let scenarioKey = "";
-const BG_TARGETS = ["terms", "6", "7", "8"] as const;
-const bgInputs = BG_TARGETS.map((t) => $<HTMLInputElement>(`bg-${t}`));
-const BOTTOM_NAMES = {
-  meeting: ["Catch-up", "Save", "For me?"],
-  education: ["Flashcard", "Quiz me", "Explain simply"],
-};
-const POSITIONS = ["Bottom left", "Bottom middle", "Bottom right"];
 
 function renderSettings(s: PanelSnapshotMsg): void {
   document.documentElement.dataset.theme = s.settings.theme;
+  modeMockBtn.classList.toggle("active", s.mode === "mock");
+  modeLiveBtn.classList.toggle("active", s.mode === "live");
+  usageMeetingBtn.classList.toggle("active", s.usage === "meeting");
+  usageEducationBtn.classList.toggle("active", s.usage === "education");
   themeDarkBtn.classList.toggle("active", s.settings.theme === "dark");
   themeLightBtn.classList.toggle("active", s.settings.theme === "light");
-  const current = s.scenarios.find((x) => x.id === s.scenario);
-  summaryEl.textContent =
-    `${s.mode === "live" ? "Live" : "Mock"} · ${s.usage === "education" ? "Education" : "Meeting"}` +
-    (s.mode === "mock" && current ? ` · ${current.title}` : "");
-  // Rebuild the list only when it changes (snapshots arrive twice a second while playing).
+  // Rebuild the scenario list only when it changes (snapshots arrive twice a second while playing).
   const key = JSON.stringify([s.scenarios, s.scenario]);
   if (key !== scenarioKey) {
     scenarioKey = key;
@@ -242,72 +337,54 @@ function renderSettings(s: PanelSnapshotMsg): void {
   BG_TARGETS.forEach((t, i) => {
     const input = bgInputs[i];
     if (document.activeElement !== input) input.value = (s.settings.keyBg[t] ?? "#000000").toLowerCase();
-    if (i > 0) $(`bg-${t}-name`).textContent = `${POSITIONS[i - 1]} · ${BOTTOM_NAMES[s.usage][i - 1]}`;
+    if (i > 0) {
+      const name = BOTTOM_NAMES[s.usage][i - 1];
+      $(`bg-${t}-name`).textContent = name;
+      input.parentElement!.title = `Bottom ${["left", "middle", "right"][i - 1]} key: ${name}`;
+    }
   });
+  const cam = s.focus.camera;
+  cameraText.textContent = cam.text.replace(/^Camera: /, "");
+  cameraText.className = `row-value${cam.state === "tracking" ? " ok" : ""}`;
+  cameraError.hidden = !cam.advice;
+  cameraError.textContent = cam.advice ?? "";
+  calibrateBtn.disabled = cam.state === "off" || cam.state === "connecting" || cam.state === "no-tracker";
+  simAway = s.focus.simulated;
+  simAwayBtn.textContent = simAway ? "Stop" : "Simulate away";
+  simAwayBtn.classList.toggle("on", simAway);
+  diagLlm.textContent = s.llm.text;
+  diagLlm.className = s.llm.state === "error" ? "err" : "";
+  const l = s.live;
+  sttText.textContent = l.configAdvice ? "Not configured" : l.stt.text.replace(/^Speech-to-text: /, "");
+  sttText.className = l.configAdvice || l.stt.state === "error" ? "err" : "";
+  spotterText.textContent = l.spotter.text.replace(/^Spotter( ·|:)? ?/, "");
+  spotterText.title = l.spotter.advice ?? "";
+}
+
+function renderEmpty(): void {
+  const hasLines = transcriptEl.querySelector(".turn") !== null;
+  emptyEl.hidden = hasLines;
+  if (hasLines || !snap) return;
+  const what = snap.usage === "education" ? "lecture" : "meeting";
+  if (snap.mode === "mock") emptyEl.innerHTML = `Press <kbd>Space</kbd> to play the mock ${what}.`;
+  else emptyEl.innerHTML = listening ? "Listening… the transcript appears as people speak." : `Press <kbd>Space</kbd> to start listening.`;
 }
 
 function renderSnapshot(s: PanelSnapshotMsg): void {
-  renderSettings(s);
+  snap = s;
   mode = s.mode;
-  modeMockBtn.classList.toggle("active", mode === "mock");
-  usageMeetingBtn.classList.toggle("active", s.usage === "meeting");
-  usageEducationBtn.classList.toggle("active", s.usage === "education");
-  modeMockBtn.textContent = s.usage === "education" ? "Mock lecture" : "Mock meeting";
-  modeLiveBtn.textContent = s.usage === "education" ? "Live lecture" : "Live meeting";
-  modeLiveBtn.classList.toggle("active", mode === "live");
-  mockControls.hidden = mode !== "mock";
-  liveControls.hidden = mode !== "live";
-  renderLive(s);
   playing = s.playback.playing;
-  playBtn.textContent = playing ? "Pause" : s.playback.ended ? "Play again" : "Play";
-  speed1Btn.classList.toggle("active", s.playback.speed === 1);
-  speed2Btn.classList.toggle("active", s.playback.speed === 2);
-  timeEl.textContent =
-    mode === "live" ? `${fmt(s.live.position)}${listening ? " · listening" : ""}` : `${fmt(s.playback.position)} / ${fmt(s.playback.duration)}`;
-  pluginEl.textContent = s.pluginsConnected > 0 ? "Keypad connected" : "Keypad not connected";
-  pluginEl.classList.toggle("ok", s.pluginsConnected > 0);
-  llmEl.textContent = s.llm.text;
-  llmEl.className = `llm-${s.llm.state}`;
-  llmErrorEl.hidden = s.llm.state !== "error" || !s.llm.advice;
-  llmErrorEl.textContent = s.llm.advice ?? "";
-
-  gridEl.replaceChildren(
-    ...s.keys.map((k) => {
-      const key = document.createElement("div");
-      key.className = `key state-${k.state}`;
-      // In alert, `color` is the background (it pulses between two reds) and the label is white.
-      if (k.state === "alert") key.style.background = k.color ?? "#e5484d";
-      else if (k.color && k.state !== "empty") key.style.setProperty("--accent-key", k.color);
-      // User background (Settings), drawn like the plugin: near-black text on a light one.
-      if (k.bg && k.state !== "alert" && k.state !== "empty") {
-        key.style.background = k.bg;
-        key.style.borderColor = k.state === "new" ? "" : k.bg;
-        if (isLight(k.bg)) {
-          key.style.color = "#111111";
-          if (!k.color) key.style.setProperty("--accent-key", "#111111");
-        }
-      }
-      key.title = k.term ? `${k.term} (${k.state})` : `slot ${k.slot} (${k.state})`;
-      const cat = document.createElement("div");
-      cat.className = "cat";
-      cat.textContent = k.state === "empty" ? "" : (k.sub ?? "");
-      const label = document.createElement("div");
-      label.className = `label${k.sub ? "" : " plain"}`;
-      label.textContent = k.label;
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = k.state === "empty" ? `${k.slot}` : `${k.slot} · ${k.state}`;
-      key.append(cat);
-      key.append(label, meta);
-      return key;
-    }),
-  );
-  queueEl.textContent = s.queued.length ? `Queued: ${s.queued.join(", ")}` : "";
-  renderFocus(s.focus);
-  exportText.textContent = s.export.text;
-  exportText.className = s.export.state === "ok" ? "ok" : s.export.state === "error" ? "err" : s.export.state === "busy" ? "wait" : "";
-  exportBtn.disabled = s.export.state === "busy";
+  listening = s.live.listening;
+  renderSettings(s);
+  renderToolbar(s);
+  renderTransport(s);
+  renderKeys(s);
+  renderNotices(s);
+  renderStatusbar(s);
+  renderEmpty();
 }
+
+// --- transcript -------------------------------------------------------------------------------------
 
 /** Appends text to `parent`, wrapping the first mention of each term in <mark>. */
 function appendHighlighted(parent: HTMLElement, text: string, terms: string[]): void {
@@ -330,37 +407,55 @@ function appendHighlighted(parent: HTMLElement, text: string, terms: string[]): 
   parent.append(text.slice(pos));
 }
 
-function lineRow(l: { t: number; speaker?: string; text: string }, terms: string[]): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "line";
-  const time = document.createElement("span");
-  time.className = "t";
-  time.textContent = fmt(l.t);
+function newTurn(speaker: string, t: number): HTMLElement {
+  const turn = document.createElement("section");
+  turn.className = "turn";
+  const head = document.createElement("div");
+  head.className = "turn-head";
   const who = document.createElement("span");
   who.className = "who";
-  who.textContent = l.speaker ?? "";
-  const text = document.createElement("span");
-  text.className = "text";
-  appendHighlighted(text, l.text, terms);
-  row.append(time, who, text);
-  return row;
+  who.textContent = speaker || "Speaker";
+  const time = document.createElement("span");
+  time.className = "t";
+  time.textContent = fmt(t);
+  head.append(who, time);
+  turn.append(head);
+  return turn;
+}
+
+function lineEl(text: string, terms: string[], t: number): HTMLElement {
+  const p = document.createElement("p");
+  p.className = "line";
+  p.title = fmt(t);
+  if (listenerRe?.test(text)) {
+    p.classList.add("for-you");
+    p.title = `${fmt(t)} · mentions you`;
+  }
+  appendHighlighted(p, text, terms);
+  return p;
 }
 
 function keepScrolled(fn: () => void): void {
-  const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 40;
+  const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 48;
   fn();
   if (atBottom) transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
 function addLine(l: PanelLineMsg): void {
   keepScrolled(() => {
-    const row = lineRow(l, l.terms);
-    if (interimEl) transcriptEl.insertBefore(row, interimEl);
-    else transcriptEl.append(row);
+    const speaker = l.speaker ?? "";
+    if (!lastTurn || lastTurn.speaker !== speaker) {
+      const turn = newTurn(speaker, l.t);
+      if (interimEl) transcriptEl.insertBefore(turn, interimEl);
+      else transcriptEl.append(turn);
+      lastTurn = { el: turn, speaker };
+    }
+    lastTurn.el.append(lineEl(l.text, l.terms, l.t));
   });
+  emptyEl.hidden = true;
 }
 
-/** Live text that is not final yet: one grey row at the bottom, replaced each time. */
+/** Live text that is not final yet: one grey block at the bottom, replaced each time. */
 function setInterim(i: PanelInterimMsg | null): void {
   keepScrolled(() => {
     if (!i) {
@@ -368,12 +463,16 @@ function setInterim(i: PanelInterimMsg | null): void {
       interimEl = null;
       return;
     }
-    const row = lineRow(i, []);
-    row.classList.add("interim");
-    if (interimEl) interimEl.replaceWith(row);
-    else transcriptEl.append(row);
-    interimEl = row;
+    const block = newTurn(i.speaker ?? "", i.t);
+    block.classList.add("interim-turn");
+    const p = lineEl(i.text, [], i.t);
+    p.classList.add("interim");
+    block.append(p);
+    if (interimEl) interimEl.replaceWith(block);
+    else transcriptEl.append(block);
+    interimEl = block;
   });
+  if (i) emptyEl.hidden = true;
 }
 
 function setLevel(db: number): void {
@@ -384,57 +483,97 @@ function setLevel(db: number): void {
   renderAudioText();
 }
 
-playBtn.addEventListener("click", () => window.keypad.control(playing ? "pause" : "play"));
-modeMockBtn.addEventListener("click", () => window.keypad.control("mode-mock"));
-usageMeetingBtn.addEventListener("click", () => window.keypad.control("usage-meeting"));
-settingsBtn.addEventListener("click", () => {
-  settingsEl.hidden = !settingsEl.hidden;
-  settingsBtn.classList.toggle("on", !settingsEl.hidden);
+// --- actions ----------------------------------------------------------------------------------------
+
+function togglePlayback(): void {
+  if (mode === "mock") send(playing ? "pause" : "play");
+  else if (listening) send("listen-stop");
+  else if (!listenBtn.disabled) send("listen-start", keytermsEl.value);
+}
+
+const settingsOpen = () => !settingsEl.hidden;
+
+function setSettingsOpen(open: boolean): void {
+  settingsEl.hidden = !open;
+  settingsBtn.classList.toggle("on", open);
+  settingsBtn.setAttribute("aria-expanded", String(open));
+}
+
+playBtn.addEventListener("click", () => send(playing ? "pause" : "play"));
+restartBtn.addEventListener("click", () => send("restart"));
+speed1Btn.addEventListener("click", () => send("speed1"));
+speed2Btn.addEventListener("click", () => send("speed2"));
+listenBtn.addEventListener("click", togglePlayback);
+keytermsEl.addEventListener("input", () => {
+  keytermsTouched = true;
+  send("keyterms", keytermsEl.value);
 });
-themeDarkBtn.addEventListener("click", () => window.keypad.control("theme-dark"));
-themeLightBtn.addEventListener("click", () => window.keypad.control("theme-light"));
-bgResetBtn.addEventListener("click", () => window.keypad.control("key-bg-reset"));
-scenarioEl.addEventListener("change", () => window.keypad.control("scenario", scenarioEl.value));
+keytermsEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !listening) send("listen-start", keytermsEl.value);
+});
+exportBtn.addEventListener("click", () => send("export"));
+settingsBtn.addEventListener("click", () => setSettingsOpen(!settingsOpen()));
+
+modeMockBtn.addEventListener("click", () => send("mode-mock"));
+modeLiveBtn.addEventListener("click", () => send("mode-live"));
+usageMeetingBtn.addEventListener("click", () => send("usage-meeting"));
+usageEducationBtn.addEventListener("click", () => send("usage-education"));
+scenarioEl.addEventListener("change", () => send("scenario", scenarioEl.value));
+themeDarkBtn.addEventListener("click", () => send("theme-dark"));
+themeLightBtn.addEventListener("click", () => send("theme-light"));
+bgResetBtn.addEventListener("click", () => send("key-bg-reset"));
 // Colour pickers fire `input` continuously while dragging: send at most every 150 ms (the keypad redraws each time).
 const bgTimers = new Map<string, number>();
 BG_TARGETS.forEach((t, i) =>
   bgInputs[i].addEventListener("input", () => {
     clearTimeout(bgTimers.get(t));
-    bgTimers.set(t, window.setTimeout(() => window.keypad.control("key-bg", `${t}=${bgInputs[i].value}`), 150));
+    bgTimers.set(t, window.setTimeout(() => send("key-bg", `${t}=${bgInputs[i].value}`), 150));
   }),
 );
-usageEducationBtn.addEventListener("click", () => window.keypad.control("usage-education"));
-modeLiveBtn.addEventListener("click", () => window.keypad.control("mode-live"));
-listenBtn.addEventListener("click", () => {
-  if (listening) window.keypad.control("listen-stop");
-  else window.keypad.control("listen-start", keytermsEl.value);
+calibrateBtn.addEventListener("click", () => send("gaze-calibrate"));
+simAwayBtn.addEventListener("click", () => send("sim-away", simAway ? "off" : "on"));
+simMentionBtn.addEventListener("click", () => send("sim-mention"));
+
+// Keyboard: Space plays / listens, ⌘1 / ⌘2 mode, ⌘L source, ⌘E export, ⌘, settings, Esc closes settings.
+document.addEventListener("keydown", (e) => {
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+  if (e.key === "Escape" && settingsOpen()) {
+    setSettingsOpen(false);
+    e.preventDefault();
+    return;
+  }
+  if (e.metaKey && !e.altKey && !e.ctrlKey) {
+    const k = e.key.toLowerCase();
+    if (k === ",") setSettingsOpen(!settingsOpen());
+    else if (k === "e") send("export");
+    else if (k === "l") send(mode === "mock" ? "mode-live" : "mode-mock");
+    else if (k === "1") send("usage-meeting");
+    else if (k === "2") send("usage-education");
+    else return;
+    e.preventDefault();
+    return;
+  }
+  // Space always means play / listen (a clicked button keeps focus; Enter still activates it).
+  if (e.key === " " && !typing && !e.repeat) {
+    e.preventDefault();
+    togglePlayback();
+  }
 });
-keytermsEl.addEventListener("input", () => {
-  keytermsTouched = true;
-  window.keypad.control("keyterms", keytermsEl.value);
-});
-keytermsEl.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !listening) window.keypad.control("listen-start", keytermsEl.value);
-});
-restartBtn.addEventListener("click", () => window.keypad.control("restart"));
-simAwayBtn.addEventListener("click", () => window.keypad.control("sim-away", simAway ? "off" : "on"));
-simMentionBtn.addEventListener("click", () => window.keypad.control("sim-mention"));
-calibrateBtn.addEventListener("click", () => window.keypad.control("gaze-calibrate"));
-exportBtn.addEventListener("click", () => window.keypad.control("export"));
-speed1Btn.addEventListener("click", () => window.keypad.control("speed1"));
-speed2Btn.addEventListener("click", () => window.keypad.control("speed2"));
 
 window.keypad.on("snapshot", renderSnapshot);
 window.keypad.on("line", addLine);
 window.keypad.on("reset", () => {
   interimEl = null;
-  transcriptEl.replaceChildren();
+  lastTurn = null;
+  transcriptEl.replaceChildren(emptyEl);
+  renderEmpty();
 });
 window.keypad.on("interim", setInterim);
 window.keypad.on("level", setLevel);
 setInterval(renderAudioText, 500); // "Receiving audio" fades back when the level drops
 
-void window.keypad.init().then(({ snapshot, lines }) => {
-  renderSnapshot(snapshot);
+void window.keypad.init().then(({ snapshot, lines, listener }) => {
+  if (listener) listenerRe = new RegExp(`\\b${listener.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
   lines.forEach(addLine);
+  renderSnapshot(snapshot);
 });

@@ -57,6 +57,8 @@ interface Window {
   let revealed = false;
   let barFor = -1;
 
+  /** .card margin in overlay.css (room for its shadow inside the window). */
+  const CARD_MARGIN = 4;
   const BULLET = /^\s*[-•*]\s+/;
   const PREFIX = /^([A-Za-z][A-Za-z ]{0,14}):\s+/;
 
@@ -120,7 +122,7 @@ interface Window {
       card.dataset.tone = "";
       title.textContent = c.title;
       chip.textContent = c.category;
-      chip.style.backgroundColor = c.color;
+      chip.style.setProperty("--cat", c.color);
       explanation.textContent = c.explanation;
       explanation.classList.toggle("thinking", c.pending);
       if (c.pending) {
@@ -149,7 +151,7 @@ interface Window {
     bar.style.transform = "scaleX(1)";
     render(c);
     card.classList.toggle("no-timer", c.durationMs === null);
-    window.overlay.sized(c.id, card.getBoundingClientRect().height);
+    window.overlay.sized(c.id, card.getBoundingClientRect().height + CARD_MARGIN * 2);
   });
 
   window.overlay.onUpdate((c) => {
@@ -157,7 +159,7 @@ interface Window {
     render(c);
     card.classList.toggle("no-timer", c.durationMs === null);
     if (revealed && duration !== null && barFor !== c.id) startBar(duration);
-    window.overlay.sized(c.id, card.getBoundingClientRect().height);
+    window.overlay.sized(c.id, card.getBoundingClientRect().height + CARD_MARGIN * 2);
   });
 
   window.overlay.onReveal((id) => {
