@@ -13,9 +13,6 @@ up, saves ideas or tells you when a question is for you.
 - **Nexthink track**
 - **IMC Trading track**
 
-Architecture, rules and commands for contributors: [`CLAUDE.md`](CLAUDE.md). Plugin ↔ app contract:
-[`protocol/messages.md`](protocol/messages.md).
-
 ## What it does
 
 **Keys 1–6: terms.** New jargon enters at key 1 and moves along (first in, first out), at most 2 new terms every
