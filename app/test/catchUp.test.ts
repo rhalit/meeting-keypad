@@ -125,8 +125,83 @@ describe("CatchUpController", () => {
     await catchUp.whenIdle();
     expect(catchUp.press()).toBe("hidden");
     expect(overlay.current()).toBeNull();
-    expect(catchUp.press()).toBe("started");
-    expect(llm.calls).toHaveLength(2);
+    expect(catchUp.press()).toBe("reshown"); // nothing new said: the same summary, no call
+    expect(llm.calls).toHaveLength(1);
+  });
+
+  describe("press guards", () => {
+    async function summarise(body = "- Said: x") {
+      expect(catchUp.press()).toBe("started");
+      llm.last().push(body).end();
+      await catchUp.whenIdle();
+    }
+
+    it("re-shows the last summary when no new line arrived, however long ago, without calling the model", async () => {
+      talk(60);
+      await summarise("- Said: first");
+      catchUp.press(); // hide
+      clock.advance(5 * 60_000);
+      expect(catchUp.press()).toBe("reshown");
+      expect(text()).toMatchObject({ eyebrow: "Catch-up · nothing new", body: "- Said: first", streaming: false, durationMs: 20_000 });
+      expect(llm.calls).toHaveLength(1);
+      expect(logs.some((l) => l.includes("re-shows the last summary (no new line"))).toBe(true);
+      expect(catchUp.press()).toBe("hidden"); // the re-shown card toggles like any other
+    });
+
+    it("with new lines, allows a new call only 10 s after the last one started; presses in between re-show", async () => {
+      talk(60);
+      await summarise("- Said: first");
+      catchUp.press(); // hide
+      transcript.add({ t: 61, speaker: "Omar", text: "something new" });
+      clock.advance(9_999);
+      expect(catchUp.press()).toBe("reshown");
+      expect(text()).toMatchObject({ eyebrow: "Catch-up · last summary", body: "- Said: first" });
+      expect(logs.some((l) => l.includes("cooldown (1 s left)"))).toBe(true);
+      catchUp.press(); // hide
+      clock.advance(1);
+      expect(catchUp.press()).toBe("started");
+      expect(llm.calls).toHaveLength(2);
+    });
+
+    it("a burst of 117 presses (bumped in a bag) makes at most one call per 10 s", async () => {
+      talk(60);
+      let t = 60;
+      let ended = 0;
+      for (let i = 0; i < 117; i++) {
+        catchUp.press();
+        if (llm.calls.length > ended) {
+          llm.last().push("- Said: x").end();
+          ended = llm.calls.length;
+        }
+        await flush();
+        clock.advance(1300);
+        if (i % 4 === 0) transcript.add({ t: ++t, text: `new ${i}` });
+      }
+      // 117 presses over ~152 s with new lines all along: at most one call per 10 s.
+      expect(llm.calls.length).toBeLessThanOrEqual(16);
+      expect(llm.calls.length).toBeGreaterThan(1);
+    });
+
+    it("during the cooldown after a failed call, says when it can run again", async () => {
+      talk(60);
+      catchUp.press();
+      llm.last().fail(new LlmError("server", "HTTP 500"));
+      await catchUp.whenIdle();
+      transcript.add({ t: 61, text: "more" });
+      clock.advance(3000);
+      catchUp.press(); // hides the error card
+      expect(catchUp.press()).toBe("cooldown");
+      expect(text().title).toBe("Try again in 7 s.");
+      expect(llm.calls).toHaveLength(1);
+    });
+
+    it("a new meeting forgets the last summary and the cooldown", async () => {
+      talk(60);
+      await summarise();
+      catchUp.cancel();
+      overlay.hide("restart");
+      expect(catchUp.press()).toBe("started");
+    });
   });
 
   it("stops the request when a term card replaces it", async () => {

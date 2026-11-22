@@ -22,6 +22,7 @@ import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSou
 import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
 import { OverlayController, type HideReason, type OverlayCard } from "../pipeline/overlay.js";
+import { PressDebouncer } from "../pipeline/pressGuard.js";
 import type { KeyState } from "../pipeline/protocol.js";
 import { SaveController, fileSavedIdeas } from "../pipeline/save.js";
 import { SlotManager } from "../pipeline/slots.js";
@@ -293,8 +294,16 @@ function startListening(text: string): void {
   liveSource.start(keyterms);
 }
 
+/** Same-slot repeats within 300 ms are dropped (a bumped keypad, a bouncing key). */
+const debouncer = new PressDebouncer(clock);
+
 bridge.on("press", ({ slot }: PressEvent) => {
   const received = performance.now();
+  const guard = debouncer.check(slot);
+  if (!guard.ok) {
+    log(`PRESS slot ${slot} ignored: ${guard.reason}`);
+    return;
+  }
   const r = slots.press(slot);
   switch (r.kind) {
     case "term": {

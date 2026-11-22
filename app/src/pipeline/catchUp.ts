@@ -31,9 +31,12 @@ export interface CatchUpOptions {
   visibleMs?: number;
   errorMs?: number;
   notMuchMs?: number;
+  /** At most one model call per this long (start to start); a press in between re-shows the last card. */
+  cooldownMs?: number;
 }
 
-export type CatchUpPress = "ignored" | "hidden" | "not-much" | "started";
+/** "reshown": the last summary again, no model call (nothing new said, or within the cooldown). */
+export type CatchUpPress = "ignored" | "hidden" | "not-much" | "started" | "reshown" | "cooldown";
 
 interface Run {
   ac: AbortController;
@@ -48,6 +51,10 @@ interface Run {
  * Catch-up key (slot 6): streams a 3-bullet summary of the last 120 s into a text card.
  * Slot 6 is "busy" while it runs. A press while running is ignored; a press on the visible
  * Catch-up card hides it. If another card replaces it mid-stream, the request is aborted.
+ *
+ * Press guards (a bumped keypad must not burn model calls): if no new final line arrived since the
+ * last summary, the press re-shows it instead of calling the model; otherwise at most one call per
+ * 10 s, and a press during that cooldown re-shows the last summary (or says when it can run again).
  */
 export class CatchUpController {
   private readonly o: Required<Omit<CatchUpOptions, "onLlmOutcome" | "listenerName">> &
@@ -55,6 +62,10 @@ export class CatchUpController {
   private run: Run | null = null;
   private readonly inFlight = new Set<Promise<void>>();
   private cardId: number | null = null;
+  /** Last finished summary and the newest transcript line it covered. */
+  private last: { body: string; lineKey: string } | null = null;
+  /** Clock ms of the last model call. */
+  private lastCallAt: number | null = null;
 
   constructor(opts: CatchUpOptions) {
     this.o = {
@@ -65,6 +76,7 @@ export class CatchUpController {
       visibleMs: 20_000,
       errorMs: 8_000,
       notMuchMs: 6_000,
+      cooldownMs: 10_000,
       ...opts,
     };
   }
@@ -79,6 +91,23 @@ export class CatchUpController {
       overlay.hide("toggle");
       this.cardId = null;
       return "hidden";
+    }
+    const latest = this.latestLineKey();
+    if (this.last && latest === this.last.lineKey) {
+      log("catch-up: press re-shows the last summary (no new line since it, no model call)");
+      this.reshow("nothing new");
+      return "reshown";
+    }
+    const sinceCall = this.lastCallAt === null ? Infinity : this.o.clock.now() - this.lastCallAt;
+    if (sinceCall < this.o.cooldownMs) {
+      const left = Math.ceil((this.o.cooldownMs - sinceCall) / 1000);
+      log(`catch-up: press during the ${this.o.cooldownMs / 1000} s cooldown (${left} s left), no model call`);
+      if (this.last) {
+        this.reshow("last summary");
+        return "reshown";
+      }
+      this.cardId = overlay.showText({ eyebrow: "Catch-up", title: `Try again in ${left} s.`, durationMs: this.o.notMuchMs });
+      return "cooldown";
     }
     const now = this.o.meetingTime();
     const lines = this.o.transcript.getLast(this.o.windowS, now);
@@ -102,10 +131,12 @@ export class CatchUpController {
     while (this.inFlight.size > 0) await Promise.all([...this.inFlight]);
   }
 
-  /** Stop any run (meeting restart). The caller hides the card. */
+  /** Stop any run (meeting restart) and forget the last summary. The caller hides the card. */
   cancel(): void {
     const r = this.run;
     this.cardId = null;
+    this.last = null;
+    this.lastCallAt = null;
     if (!r) return;
     this.run = null;
     this.clearFlush(r);
@@ -122,7 +153,9 @@ export class CatchUpController {
       durationMs: null,
     });
     const run: Run = { ac: new AbortController(), cardId, startedAt: clock.now(), firstAt: null, text: "", flushTimer: null };
+    const lineKey = this.latestLineKey();
     this.run = run;
+    this.lastCallAt = run.startedAt;
     this.cardId = cardId;
     keys.setActionOverride(CATCH_UP_SLOT, { state: "busy" });
     log(`catch-up: ${lines.length} lines (${lines[0].t}-${lines[lines.length - 1].t} s) -> ${llm.describe()}`);
@@ -161,6 +194,7 @@ export class CatchUpController {
       const body = cleanBullets(run.text);
       if (!body) throw new LlmError("bad_response", "The model returned no text");
       overlay.finishText(cardId, this.o.visibleMs, body);
+      this.last = { body, lineKey };
       log(`catch-up: done in ${clock.now() - run.startedAt} ms`);
       this.o.onLlmOutcome?.({ ok: true });
     } catch (err) {
@@ -186,6 +220,24 @@ export class CatchUpController {
         keys.setActionOverride(CATCH_UP_SLOT, null);
       }
     }
+  }
+
+  /** Identity of the newest final line in the whole transcript ("" when empty). */
+  private latestLineKey(): string {
+    const all = this.o.transcript.getLast(Number.POSITIVE_INFINITY);
+    const l = all[all.length - 1];
+    return l ? `${l.t}|${l.speaker ?? ""}|${l.text}` : "";
+  }
+
+  /** The last summary again, as a finished card (no model call). */
+  private reshow(why: string): void {
+    if (!this.last) return;
+    this.cardId = this.o.overlay.showText({
+      eyebrow: `Catch-up · ${why}`,
+      title: "Catch-up",
+      body: this.last.body,
+      durationMs: this.o.visibleMs,
+    });
   }
 
   /** Push the text so far; if the card is gone (another card took over), stop the request. */

@@ -115,6 +115,10 @@ Do not build features from later phases unless asked.
   every other term moves one slot forward, the term on slot 5 leaves (opened terms are not removed early). A term's
   state (new / shown / seen) moves with it. At most 2 new terms per 10 s (extras queue). A press within 500 ms after
   a shift goes to the term that was on that key before the shift. A term shown once is not shown again in that meeting.
+- Press guards (a bumped keypad must not burn model calls): the app drops a press of the same slot within 300 ms
+  of that slot's previous press (`pressGuard.ts`). Catch-up re-shows its last summary when no new final line arrived
+  since it, and calls the model at most once per 10 s (a press in between re-shows the last card). Save keeps its
+  dedupe and has a 3 s cooldown between model calls. Every ignored press is logged with the reason.
 - Never commit `app/.env`, never print or log the key. LLM settings live there:
   `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
   (see `app/.env.example` for Groq / Ollama / OpenRouter). Term spotter: `LLM_SPOTTER_MODEL` (currently

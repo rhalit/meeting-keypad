@@ -155,6 +155,7 @@ describe("SaveController", () => {
     llm.last().end(canary);
     await save.whenIdle();
     addUpTo(139);
+    clock.advance(3000);
     expect(save.press()).toBe("started");
     llm.last().end({ ...canary, title: "Canary rollout plan", quote: "five percent of traffic first" });
     await save.whenIdle();
@@ -168,6 +169,7 @@ describe("SaveController", () => {
     llm.last().end(canary);
     await save.whenIdle();
     addUpTo(139);
+    clock.advance(3000);
     save.press();
     llm.last().end(coldStart);
     await save.whenIdle();
@@ -212,6 +214,7 @@ describe("SaveController", () => {
     expect(card().body).toBe("The API key was rejected (HTTP 401). Check LLM_API_KEY in app/.env, then restart the app.");
     expect(slots.getAll()[SAVE_SLOT].state).toBe("shown");
 
+    clock.advance(3000);
     save.press();
     clock.advance(20_000);
     await save.whenIdle();
@@ -227,7 +230,65 @@ describe("SaveController", () => {
     await save.whenIdle();
     expect(card()).toMatchObject({ eyebrow: "Save failed", title: "Couldn't write the file" });
     failWrite = false;
+    clock.advance(3000);
     expect(save.press()).toBe("started"); // not "duplicate": nothing was written
+  });
+
+  describe("3 s cooldown", () => {
+    let logs: string[];
+    beforeEach(() => {
+      logs = [];
+      save = new SaveController({
+        clock,
+        llm,
+        transcript,
+        meetingTime: () => now,
+        keys: slots,
+        overlay,
+        file: { append: async (md) => void written.push(md) },
+        log: (m) => logs.push(m),
+      });
+    });
+
+    it("with new lines, a press within 3 s of the last model call is ignored and logged; after 3 s it runs", async () => {
+      save.press();
+      llm.last().end(canary);
+      await save.whenIdle();
+      addUpTo(139);
+      clock.advance(2999);
+      expect(save.press()).toBe("cooldown");
+      expect(llm.calls).toHaveLength(1);
+      expect(logs.some((l) => l.includes("save: press during the 3 s cooldown (2999 ms after the last save), ignored"))).toBe(true);
+      clock.advance(1);
+      expect(save.press()).toBe("started");
+      expect(llm.calls).toHaveLength(2);
+    });
+
+    it("the cooldown also follows a failed call", async () => {
+      save.press();
+      llm.last().fail(new LlmError("server", "HTTP 500"));
+      await save.whenIdle();
+      clock.advance(1000);
+      expect(save.press()).toBe("cooldown");
+      expect(llm.calls).toHaveLength(1);
+    });
+
+    it("nothing new said still answers 'Already saved' during the cooldown (no call)", async () => {
+      save.press();
+      llm.last().end(canary);
+      await save.whenIdle();
+      clock.advance(500);
+      expect(save.press()).toBe("duplicate");
+      expect(llm.calls).toHaveLength(1);
+    });
+
+    it("reset() clears the cooldown", async () => {
+      save.press();
+      llm.last().end(canary);
+      await save.whenIdle();
+      save.reset();
+      expect(save.press()).toBe("started");
+    });
   });
 
   it("reset() during a save cancels it without an error card", async () => {

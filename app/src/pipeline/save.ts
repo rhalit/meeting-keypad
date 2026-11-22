@@ -139,9 +139,11 @@ export interface SaveOptions {
   flashMs?: number;
   titleCardMs?: number;
   errorMs?: number;
+  /** At most one model call per this long (start to start); presses in between are ignored. */
+  cooldownMs?: number;
 }
 
-export type SavePress = "ignored" | "empty" | "duplicate" | "started";
+export type SavePress = "ignored" | "empty" | "duplicate" | "cooldown" | "started";
 export type SaveResult = "saved" | "duplicate" | "failed" | "cancelled";
 
 /**
@@ -151,7 +153,8 @@ export type SaveResult = "saved" | "duplicate" | "failed" | "cancelled";
  *
  * No duplicates: a press while saving is ignored; with no new transcript line since the last
  * save the model is not asked again; and a result that repeats an idea saved in this meeting
- * (same quoted line, overlapping quote or near-identical title) is not written.
+ * (same quoted line, overlapping quote or near-identical title) is not written. On top of that,
+ * at most one model call per 3 s: a press in that cooldown is ignored (logged).
  */
 export class SaveController {
   private readonly o: Required<Omit<SaveOptions, "onLlmOutcome">> & Pick<SaveOptions, "onLlmOutcome">;
@@ -159,6 +162,8 @@ export class SaveController {
   private flashTimer: TimerHandle | null = null;
   private saved: SavedIdea[] = [];
   private last: { idea: SavedIdea; upTo: number } | null = null;
+  /** Clock ms of the last model call. */
+  private lastCallAt: number | null = null;
   private readonly inFlight = new Set<Promise<SaveResult>>();
   /** Outcome of the last finished run (tests, smoke script). */
   lastResult: SaveResult | null = null;
@@ -171,6 +176,7 @@ export class SaveController {
       flashMs: 1500,
       titleCardMs: 3000,
       errorMs: 8000,
+      cooldownMs: 3000,
       ...opts,
     };
   }
@@ -192,6 +198,11 @@ export class SaveController {
       this.confirm(this.last.idea, true);
       return "duplicate";
     }
+    const since = this.lastCallAt === null ? Infinity : this.o.clock.now() - this.lastCallAt;
+    if (since < this.o.cooldownMs) {
+      log(`save: press during the ${this.o.cooldownMs / 1000} s cooldown (${since} ms after the last save), ignored`);
+      return "cooldown";
+    }
     const p = this.run(lines);
     this.inFlight.add(p);
     void p.finally(() => this.inFlight.delete(p));
@@ -211,6 +222,7 @@ export class SaveController {
     this.o.keys.setActionOverride(SAVE_SLOT, null);
     this.saved = [];
     this.last = null;
+    this.lastCallAt = null;
   }
 
   private async run(lines: TranscriptLine[]): Promise<SaveResult> {
@@ -219,6 +231,7 @@ export class SaveController {
     this.busy = ac;
     keys.setActionOverride(SAVE_SLOT, { state: "busy" });
     const started = clock.now();
+    this.lastCallAt = started;
     const upTo = lines[lines.length - 1].t;
     log(`save: ${lines.length} lines (${lines[0].t}-${upTo} s) -> ${llm.describe()}`);
     let result: SaveResult = "failed";
