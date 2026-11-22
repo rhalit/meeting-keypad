@@ -59,7 +59,10 @@ Do not build features from later phases unless asked.
   `cd app && npm run smoke:live` (add `-- --keyterms` for glossary keyterms, `-- --lines 8` for a short run).
   Audio is cached in `tools/mock-audio/` (gitignored). Needs the system audio permission for the terminal.
 - System audio permission: System Settings → Privacy & Security → Screen & System Audio Recording →
-  "System Audio Recording Only" → the app that started the app (Terminal for `npm run dev`).
+  "System Audio Recording Only". For `npm run dev` this must be **Electron**
+  (add `app/node_modules/electron/dist/Electron.app` with +): macOS credits the permission to Electron,
+  so Terminal alone gives silence. `npm run smoke:live` runs in plain Node, so it needs the terminal app.
+  New Mac setup steps are in `README.md` ("Setting up on a new Mac").
 
 ## Logi Actions SDK docs
 - Index for AI tools: https://logitech.github.io/actions-sdk-docs/llms.txt

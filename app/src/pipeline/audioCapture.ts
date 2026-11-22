@@ -28,7 +28,8 @@ export interface AudioInput extends EventEmitter {
 export const PERMISSION_ADVICE =
   "macOS only gives system audio to apps you allow. If a prompt is open, click Allow. Otherwise: " +
   "System Settings → Privacy & Security → Screen & System Audio Recording → \"System Audio Recording Only\" → " +
-  "turn on the app Meeting Keypad was started from (Terminal for `npm run dev`; add it with + if missing). " +
+  "turn on Electron (macOS credits the permission to Electron, not Terminal, for `npm run dev`; " +
+  "add app/node_modules/electron/dist/Electron.app with + if missing). " +
   "Then press Stop and Start listening again.";
 
 export const MISSING_ADVICE = "Build it once: cd app && npm run build:audiotee";
