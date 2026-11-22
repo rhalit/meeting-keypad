@@ -69,7 +69,7 @@
 | `shown` | as described above                                                        |
 | `seen`  | the label turns grey (term already opened)                                |
 | `busy`  | label followed by "…" (the model is working: Catch-up, Save)              |
-| `alert` | red `#E5484D` background, white label (app may toggle to make it pulse)   |
+| `alert` | background in `color` (default red `#E5484D`), white label. The app pulses it by alternating `color` |
 
 ### Term order (app side, for reference)
 Slots 0–5 are read left to right, top to bottom. A new term always appears on slot 0, every other term
@@ -80,6 +80,10 @@ A press within 500 ms after a shift goes to the term that was on that key before
 - Catch-up (slot 6) and Save (slot 7) are `busy` while the model works, then `shown` again.
 - After a save, slot 7 is sent as `{ "slot": 7, "label": "Saved ✓", "color": "#3FB950", "state": "shown" }`
   for 1.5 s, then back to its normal `Save` label.
+- "For me?" (slot 8): when a question or request aimed at the listener is heard, the app sends
+  `{ "slot": 8, "label": "For me?", "color": "#E5484D", "state": "alert" }` and then alternates `color` between
+  `#E5484D` and `#9E2A2F` every 600 ms (pulse). After a press, or 90 s without one, slot 8 goes back to
+  `{ "slot": 8, "label": "For me?", "state": "shown" }`. In `alert`, `color` is the background, never the label colour.
 
 ## When the app is unreachable
 The plugin blanks all keys and shows `No app` on slot 4, so it is obvious on the device.

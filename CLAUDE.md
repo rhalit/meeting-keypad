@@ -33,7 +33,7 @@ Phase 2b is done: a term key opens the overlay card (`app/src/pipeline/overlay.t
 `app/src/main/overlayWindow.ts` draws) with explanations from `mock/glossary.json`.
 Phase 2c: Catch-up (slot 6) and Save (slot 7) work on the mock meeting through an
 OpenAI-compatible LLM (`app/src/pipeline/llm.ts`, controllers `catchUp.ts` / `save.ts`).
-Save appends to `output/saved-ideas.md` (gitignored). "Was that for me?" (slot 8) is not built yet.
+Save appends to `output/saved-ideas.md` (gitignored).
 Phase 3a: live transcript. The panel has a Mock / Live switch. In Live mode, `LiveSource`
 (`app/src/pipeline/liveSource.ts`) runs audiotee (`audioCapture.ts`, system audio, 16 kHz PCM)
 into Deepgram nova-3 (`stt.ts`). Final utterances become TranscriptBuffer lines `{t, speaker?, text}`,
@@ -51,6 +51,16 @@ The spotter accepts a term only if its `heard` words are in the NEW lines (check
 mishearings of terms already shown (`variantOf()`). General categories (Tech, Science, Health, Business, Finance,
 Law, Other). The app sends the full term; the plugin fits it (`plugin/.../Core/TextFit.cs`). Term keys are a FIFO
 conveyor. Offline tuning: `record:live` saves raw Deepgram messages, `replay:live` runs the pipeline from them.
+Phase 4: "For me?" (slot 8) and meeting export, Mock and Live. `ForMeController` (`forMe.ts`) checks every final line
+with `mentionsListener()` (`nameMatch.ts`: name + `listenerAliases` exactly, one edit from the NAME only, so "really" never
+matches the alias "Rally"); only then one `LLM_MODEL` call (`FOR_ME_SCHEMA`, last 60 s as context). For the listener →
+slot 8 `alert`, pulsing `#E5484D`/`#9E2A2F` every 600 ms, stops after 90 s (card kept); a press shows question / context /
+suggested reply ("N questions" when more wait) and restores the key. The name and aliases are always Deepgram keyterms.
+`MeetingExporter` (`exportMeeting.ts`) writes `output/meetings/<YYYY-MM-DD HHmm>.md` (title, date, duration, 5-bullet
+summary (one call, skipped < 30 s said, reused when nothing new), questions, saved ideas, terms with explanations in order
+(opened marked), catch-ups, transcript). Runs on the panel button, Stop listening and the end of the mock meeting (each
+reveals the file in Finder) and silently on a Mock/Live switch. `MeetingRecord` (`meetingRecord.ts`) keeps start time,
+spoken seconds and the terms that reached a key.
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -63,6 +73,8 @@ Do not build features from later phases unless asked.
 - Fake core (stand-in app for testing the plugin): `cd tools && npm install && npm run fake-core`.
   Stop it before running the real app; both use port 8765.
 - App: `cd app && npm install && npm run dev` (control panel + WebSocket server), `npm test`.
+- Real model For-me + export check: `cd app && npm run smoke:forme` (mock meeting through ForMeController, expects exactly
+  2 calls and alerts at 2:32 and 4:30, then one export to `output/smoke-meetings/`; ~3 calls).
 - Real model smoke run (Catch-up + Save on the mock transcript): `cd app && npm run smoke`
   (writes `output/smoke-saved-ideas.md`). Tests never call a real model (`test/fakeLlm.ts`).
   `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play; `AUTOLISTEN=1 npm run dev` starts Live listening.
@@ -119,6 +131,8 @@ Do not build features from later phases unless asked.
   of that slot's previous press (`pressGuard.ts`). Catch-up re-shows its last summary when no new final line arrived
   since it, and calls the model at most once per 10 s (a press in between re-shows the last card). Save keeps its
   dedupe and has a 3 s cooldown between model calls. Every ignored press is logged with the reason.
+  "For me?" never calls the model on a press; its check runs only when the name is heard, one call at a time
+  (a mention during a call waits, latest only). An export makes at most one summary call.
 - Never commit `app/.env`, never print or log the key. LLM settings live there:
   `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
   (see `app/.env.example` for Groq / Ollama / OpenRouter). Term spotter: `LLM_SPOTTER_MODEL` (currently
@@ -133,7 +147,8 @@ Do not build features from later phases unless asked.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
-- `mock/config.json`: `{ "listenerName": "...", "listenerKnows": "...", "keyterms": [] }`; meeting lines say `{listener}`
+- `mock/config.json`: `{ "listenerName": "...", "listenerAliases": ["Rally"], "listenerKnows": "...", "keyterms": [] }`;
+  `listenerAliases` = mishearings of the name (matched exactly, added to Deepgram keyterms); meeting lines say `{listener}`
   where a speaker addresses them. `listenerKnows` describes the listener for the spotter and explanation prompts. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
 - Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end?, words?: [{ text, start, end }], reason? }`,
   where `t` = meeting seconds since Start listening, `speaker` = "Speaker N" from Deepgram diarization, `words` = word
@@ -149,5 +164,7 @@ Do not build features from later phases unless asked.
   "In this meeting" sentence), `full` = expansion, `variantOf` = an already-shown term this is a variant/mishearing of, or "").
 - Live explanation (`Explainer`): `{ "full", "explanation" }`, cached per term for the app session. The card's category is
   always the key's. "In this meeting" = only the sentence(s) with the heard words, max ~25 words (`example.ts`).
+- For-me check (`FOR_ME_SCHEMA`): `{ isForListener, question, context (2 sentences), suggestedReply (1-2 sentences) }`.
+- Export summary (`SUMMARY_SCHEMA`): `{ title, bullets: string[] }` (5 kept).
 - Recording (`record:live`, `app/src/pipeline/replay.ts`): JSONL, line 1 `{ type: "header", version: 1, model, language, ... }`,
   then `{ at: <ms since start>, offset, msg: <Deepgram message> }` or `{ at, offset, type: "connect" }`.

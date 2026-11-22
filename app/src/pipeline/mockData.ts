@@ -22,6 +22,8 @@ export type Glossary = Record<string, GlossaryEntry>;
 export interface MockConfig {
   /** The person using the keypad; speakers address them by this name. */
   listenerName: string;
+  /** Other spellings speech-to-text writes for the name (e.g. "Rally"); matched exactly, added to Deepgram keyterms. */
+  listenerAliases: string[];
   /** What the listener already knows (used in the term spotter and explanation prompts). Optional. */
   listenerKnows: string;
   /** "Meeting topic / keyterms" for live speech-to-text (Deepgram keyterms). Optional. */
@@ -53,7 +55,14 @@ export function loadConfig(path: string): MockConfig {
   const k = (raw as { keyterms?: unknown }).keyterms;
   const keyterms = Array.isArray(k) ? k.map(String) : typeof k === "string" ? [k] : [];
   const knows = (raw as { listenerKnows?: unknown }).listenerKnows;
-  return { listenerName: raw.listenerName.trim(), listenerKnows: typeof knows === "string" ? knows.trim() : "", keyterms };
+  const a = (raw as { listenerAliases?: unknown }).listenerAliases;
+  const listenerAliases = (Array.isArray(a) ? a.map(String) : typeof a === "string" ? [a] : []).map((s) => s.trim()).filter(Boolean);
+  return {
+    listenerName: raw.listenerName.trim(),
+    listenerAliases,
+    listenerKnows: typeof knows === "string" ? knows.trim() : "",
+    keyterms,
+  };
 }
 
 /** Reads meeting.json and fills in the listener's name. */

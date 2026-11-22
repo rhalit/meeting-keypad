@@ -213,6 +213,11 @@ export class SaveController {
     while (this.inFlight.size > 0) await Promise.all([...this.inFlight]);
   }
 
+  /** The ideas saved in this meeting, oldest first (export). */
+  savedIdeas(): SavedIdea[] {
+    return this.saved.map((i) => ({ ...i }));
+  }
+
   /** New meeting: stop a running save, restore the key, forget what was saved. */
   reset(): void {
     this.busy?.abort(new LlmError("cancelled", "Cancelled"));

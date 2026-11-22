@@ -138,7 +138,8 @@ namespace Loupedeck.MeetingKeysPlugin
                     label += TextFit.Ellipsis;
                     break;
                 case "alert":
-                    b.Clear(AlertBg);
+                    // In alert, `color` is the background (the app alternates two reds to pulse), the label stays white.
+                    b.Clear(ParseHex(s.Color) ?? AlertBg);
                     textColor = BitmapColor.White;
                     categoryColor = BitmapColor.White;
                     break;
@@ -161,7 +162,7 @@ namespace Loupedeck.MeetingKeysPlugin
             }
 
             PluginLog.Info(
-                $"Draw slot {slot}: state={s.State} label={label.Replace("\n", "\\n")} sub={s.Sub ?? "-"} " +
+                $"Draw slot {slot}: state={s.State} label={label.Replace("\n", "\\n")} sub={s.Sub ?? "-"} color={s.Color ?? "-"} " +
                 $"{b.Width}x{b.Height} font {fit.FontSize}px lines=[{String.Join(" | ", fit.Lines)}]{(fit.Abbreviated ? " abbreviated" : "")}");
             return b.ToImage();
         }

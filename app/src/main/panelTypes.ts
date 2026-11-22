@@ -49,6 +49,13 @@ export interface PanelSnapshot {
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];
+  /** Last meeting export. */
+  export: PanelExport;
+}
+
+export interface PanelExport {
+  state: "idle" | "busy" | "ok" | "error";
+  text: string;
 }
 
 export interface PanelLine {
@@ -77,4 +84,6 @@ export type PanelCommand =
   | "listen-start"
   | "listen-stop"
   /** arg: the keyterms text (remembered while typing) */
-  | "keyterms";
+  | "keyterms"
+  /** Write output/meetings/<date>.md and show it in Finder */
+  | "export";

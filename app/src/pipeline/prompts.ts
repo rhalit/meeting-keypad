@@ -171,3 +171,80 @@ export function explainMessages(opts: { term: string; listener: string; heard?: 
     },
   ];
 }
+
+// --- "For me?" (LLM_MODEL, only when the listener's name was heard) ------------------------------
+
+export interface ForMeJson {
+  isForListener: boolean;
+  question: string;
+  context: string;
+  suggestedReply: string;
+}
+
+export const FOR_ME_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    isForListener: { type: "boolean", description: "True if the line asks the listener a question or asks them to do something" },
+    question: { type: "string", description: "The question or request, one short sentence, addressed to the listener" },
+    context: { type: "string", description: "Two short sentences: what the discussion was about and why it is asked" },
+    suggestedReply: { type: "string", description: "One or two sentences the listener could say, first person" },
+  },
+  required: ["isForListener", "question", "context", "suggestedReply"],
+  additionalProperties: false,
+};
+
+export function forMeMessages(opts: { listener: string; name: string; heard: string; line: TranscriptLine; context: TranscriptLine[] }): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        `You watch a live meeting for one listener: ${opts.listener}. Their name (or a mishearing of it, here "${opts.heard}") ` +
+        "was just said in the LINE. Decide whether the LINE asks the listener a question or asks them to do something " +
+        "(isForListener true), or only mentions them (thanks, a reference, talking about them: false). Return JSON with: " +
+        "isForListener; question (the question or request in one short plain sentence, addressed to the listener as " +
+        '"you", e.g. "Can you send Omar the pen test scope by Wednesday?"); context (exactly two short sentences: what ' +
+        "was being discussed and why this is asked); suggestedReply (one or two sentences the listener could say right " +
+        'now, first person, friendly and concrete; keep every deadline, name and number exactly as in the LINE, and do ' +
+        "not promise things the transcript does not support). When " +
+        'isForListener is false, the other fields may be "".',
+    },
+    {
+      role: "user",
+      content:
+        (opts.context.length ? `Last minute (context):\n${formatTranscript(opts.context)}\n\n` : "") +
+        `LINE:\n${formatTranscript([opts.line])}`,
+    },
+  ];
+}
+
+// --- meeting export summary (LLM_MODEL, one call per export) -------------------------------------
+
+export interface MeetingSummaryJson {
+  title: string;
+  bullets: string[];
+}
+
+export const SUMMARY_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Meeting title, at most 8 words, no full stop" },
+    bullets: { type: "array", items: { type: "string" }, description: "Exactly 5 bullets, each at most 25 words" },
+  },
+  required: ["title", "bullets"],
+  additionalProperties: false,
+};
+
+export function summaryMessages(lines: TranscriptLine[], listenerName?: string): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You write the notes of a meeting from its transcript. Return JSON with: title (what the meeting was about, " +
+        "at most 8 words, no full stop) and bullets (exactly 5 bullets in plain everyday English, at most 25 words each: " +
+        "the main points, decisions and agreed tasks with their owners, in the order they came up; use the speakers' names" +
+        (listenerName ? `; the reader is ${listenerName}` : "") +
+        "). No markdown inside the strings.",
+    },
+    { role: "user", content: `Transcript:\n${formatTranscript(lines)}` },
+  ];
+}

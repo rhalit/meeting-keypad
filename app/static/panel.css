@@ -80,6 +80,9 @@ section.grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .key.state-seen .label { color: #7d8590; }
 .key.state-busy .label::after { content: "…"; }
 .key.state-alert { background: #e5484d; }
+.key.state-alert .label.plain { color: #fff; }
+.export-row { align-items: center; gap: 8px; }
+.export-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .queue { margin-top: 6px; color: var(--muted); min-height: 1.4em; }
 .transcript {
   flex: 1;
@@ -134,3 +137,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 #spotter-text.ok::before { color: var(--ok); }
 #spotter-text.warn { color: #d29922; }
 #spotter-text.err { color: #f85149; }
+#export-text.ok { color: #3fb950; }
+#export-text.err { color: #f85149; }
+#export-text.wait { color: #d29922; }

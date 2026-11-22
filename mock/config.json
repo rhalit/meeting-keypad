@@ -1,5 +1,9 @@
 {
   "listenerName": "Rhali",
+  "listenerAliases": [
+    "Rally",
+    "Rali"
+  ],
   "listenerKnows": "a general audience: no particular tech, finance or business background",
   "keyterms": []
 }

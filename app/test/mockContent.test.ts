@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CATEGORIES, MAX_TERM_CHARS } from "../src/pipeline/protocol.js";
 import { LISTENER_PLACEHOLDER, loadConfig, loadGlossary, loadMeeting } from "../src/pipeline/mockData.js";
+import { mentionsListener } from "../src/pipeline/nameMatch.js";
 
 const MOCK = join(__dirname, "..", "..", "mock");
 const rawMeeting = JSON.parse(readFileSync(join(MOCK, "meeting.json"), "utf8"));
@@ -79,6 +80,14 @@ describe("mock/meeting.json", () => {
     expect(lines.some((l) => l.text.includes(LISTENER_PLACEHOLDER))).toBe(false);
     expect(lines.filter((l) => l.text.startsWith(`${listenerName},`))).toHaveLength(2);
     expect(loadMeeting(join(MOCK, "meeting.json"), "Sam").filter((l) => l.text.startsWith("Sam,"))).toHaveLength(2);
+  });
+
+  it("only the two listener lines (2:32, 4:30) name the listener, so For-me makes exactly 2 model calls", () => {
+    const { listenerName, listenerAliases } = loadConfig(join(MOCK, "config.json"));
+    expect(listenerAliases).toContain("Rally");
+    const lines = loadMeeting(join(MOCK, "meeting.json"), listenerName);
+    const named = lines.filter((l) => mentionsListener(l.text, { name: listenerName, aliases: listenerAliases }));
+    expect(named.map((l) => l.t)).toEqual([152, 270]);
   });
 });
 

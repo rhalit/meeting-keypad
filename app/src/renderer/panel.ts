@@ -44,6 +44,7 @@ interface PanelSnapshotMsg {
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];
+  export: { state: "idle" | "busy" | "ok" | "error"; text: string };
 }
 interface PanelLineMsg {
   t: number;
@@ -91,6 +92,8 @@ const sttText = $("stt-text");
 const liveError = $("live-error");
 const spotterText = $("spotter-text");
 const learnedEl = $("learned");
+const exportBtn = $<HTMLButtonElement>("export");
+const exportText = $("export-text");
 
 let playing = false;
 let mode: "mock" | "live" = "mock";
@@ -168,7 +171,9 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
     ...s.keys.map((k) => {
       const key = document.createElement("div");
       key.className = `key state-${k.state}`;
-      if (k.color && k.state !== "empty") key.style.setProperty("--accent-key", k.color);
+      // In alert, `color` is the background (it pulses between two reds) and the label is white.
+      if (k.state === "alert") key.style.background = k.color ?? "#e5484d";
+      else if (k.color && k.state !== "empty") key.style.setProperty("--accent-key", k.color);
       key.title = k.term ? `${k.term} (${k.state})` : `slot ${k.slot} (${k.state})`;
       const cat = document.createElement("div");
       cat.className = "cat";
@@ -185,6 +190,9 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
     }),
   );
   queueEl.textContent = s.queued.length ? `Queued: ${s.queued.join(", ")}` : "";
+  exportText.textContent = s.export.text;
+  exportText.className = s.export.state === "ok" ? "ok" : s.export.state === "error" ? "err" : s.export.state === "busy" ? "wait" : "";
+  exportBtn.disabled = s.export.state === "busy";
 }
 
 /** Appends text to `parent`, wrapping the first mention of each term in <mark>. */
@@ -277,6 +285,7 @@ keytermsEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !listening) window.keypad.control("listen-start", keytermsEl.value);
 });
 restartBtn.addEventListener("click", () => window.keypad.control("restart"));
+exportBtn.addEventListener("click", () => window.keypad.control("export"));
 speed1Btn.addEventListener("click", () => window.keypad.control("speed1"));
 speed2Btn.addEventListener("click", () => window.keypad.control("speed2"));
 

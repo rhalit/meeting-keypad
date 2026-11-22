@@ -66,6 +66,8 @@ export class CatchUpController {
   private last: { body: string; lineKey: string } | null = null;
   /** Clock ms of the last model call. */
   private lastCallAt: number | null = null;
+  /** Every summary the model wrote in this meeting (`t` = meeting seconds of the press), for the export. */
+  private summaries: { t: number; body: string }[] = [];
 
   constructor(opts: CatchUpOptions) {
     this.o = {
@@ -131,11 +133,17 @@ export class CatchUpController {
     while (this.inFlight.size > 0) await Promise.all([...this.inFlight]);
   }
 
+  /** The summaries generated in this meeting, oldest first. */
+  history(): { t: number; body: string }[] {
+    return this.summaries.map((s) => ({ ...s }));
+  }
+
   /** Stop any run (meeting restart) and forget the last summary. The caller hides the card. */
   cancel(): void {
     const r = this.run;
     this.cardId = null;
     this.last = null;
+    this.summaries = [];
     this.lastCallAt = null;
     if (!r) return;
     this.run = null;
@@ -154,6 +162,7 @@ export class CatchUpController {
     });
     const run: Run = { ac: new AbortController(), cardId, startedAt: clock.now(), firstAt: null, text: "", flushTimer: null };
     const lineKey = this.latestLineKey();
+    const at = this.o.meetingTime();
     this.run = run;
     this.lastCallAt = run.startedAt;
     this.cardId = cardId;
@@ -195,6 +204,7 @@ export class CatchUpController {
       if (!body) throw new LlmError("bad_response", "The model returned no text");
       overlay.finishText(cardId, this.o.visibleMs, body);
       this.last = { body, lineKey };
+      this.summaries.push({ t: at, body });
       log(`catch-up: done in ${clock.now() - run.startedAt} ms`);
       this.o.onLlmOutcome?.({ ok: true });
     } catch (err) {
