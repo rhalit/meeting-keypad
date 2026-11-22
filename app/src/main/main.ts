@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { AudioCapture } from "../pipeline/audioCapture.js";
 import { CatchUpController, type LlmOutcome } from "../pipeline/catchUp.js";
 import { realClock } from "../pipeline/clock.js";
 import { DEFAULT_PORT, KeypadBridge, PortInUseError, type PressEvent } from "../pipeline/keypadBridge.js";
@@ -12,16 +13,18 @@ import {
   warmUp,
   type LlmClient,
 } from "../pipeline/llm.js";
-import { loadConfig, loadGlossary, loadMeeting, type MeetingLine } from "../pipeline/mockData.js";
+import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
+import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
 import { OverlayController, type HideReason, type OverlayCard } from "../pipeline/overlay.js";
 import type { KeyState } from "../pipeline/protocol.js";
 import { SaveController, fileSavedIdeas } from "../pipeline/save.js";
 import { SlotManager } from "../pipeline/slots.js";
+import { SttError, deepgramFactory, loadSttConfig, parseKeyterms, sttAdvice, type SttFactory } from "../pipeline/stt.js";
 import type { TermCandidate } from "../pipeline/terms.js";
 import { TranscriptBuffer } from "../pipeline/transcriptBuffer.js";
 import { OverlayWindow } from "./overlayWindow.js";
-import type { PanelCommand, PanelLine, PanelLlm, PanelSnapshot } from "./panelTypes.js";
+import type { PanelCommand, PanelLine, PanelLlm, PanelMode, PanelSnapshot } from "./panelTypes.js";
 
 const ts = () => new Date().toISOString().slice(11, 23);
 const log = (...args: unknown[]) => console.log(ts(), ...args);
@@ -40,7 +43,8 @@ const clock = realClock;
 const transcript = new TranscriptBuffer();
 const slots = new SlotManager({ clock });
 const bridge = new KeypadBridge({ initial: slots.getAll(), log: (m) => log(`[keypad] ${m}`) });
-const source = new MockSource(meeting, glossary, clock);
+const mockSource = new MockSource(meeting, glossary, clock);
+let mode: PanelMode = "mock";
 const playedLines: PanelLine[] = [];
 const overlay = new OverlayController({ clock, lookup: (term) => glossary[term] });
 
@@ -60,6 +64,31 @@ try {
   llm = new MisconfiguredClient(e);
   llmStatus = { state: "error", text: "Model: not configured", advice: errorAdvice(e) };
 }
+
+// --- live meeting: audiotee -> Deepgram -> LiveSource (Phase 3a) ------------------------------
+
+const audioteePath = process.env.AUDIOTEE_PATH || join(appRoot, "..", "tools", "audiotee", "bin", "audiotee");
+const audio = new AudioCapture({ binPath: audioteePath, clock, log: (m) => log(`[audio] ${m}`) });
+let sttFactory: SttFactory | null = null;
+let sttConfigAdvice: string | undefined;
+try {
+  sttFactory = deepgramFactory(loadSttConfig(process.env), { clock, log: (m) => log(`[stt] ${m}`) });
+} catch (err) {
+  const e = err instanceof SttError ? err : new SttError("config", String(err));
+  sttConfigAdvice = sttAdvice(e);
+  log(`[stt] not configured: ${e.message}`);
+}
+const liveSource = new LiveSource({
+  clock,
+  audio,
+  stt: (o) => {
+    if (!sttFactory) throw new Error("speech-to-text not configured");
+    return sttFactory(o);
+  },
+  log,
+});
+/** The panel's "meeting topic / keyterms" text, used at the next Start listening. */
+let keytermsText = config.keyterms.join(", ");
 
 function setLlmStatus(s: PanelLlm): void {
   llmStatus = s;
@@ -91,7 +120,7 @@ async function runWarmUp(): Promise<void> {
   }
 }
 
-const meetingTime = () => source.position();
+const meetingTime = () => (mode === "live" ? liveSource.position() : mockSource.position());
 const catchUp = new CatchUpController({
   clock,
   llm,
@@ -128,7 +157,9 @@ function send(channel: string, payload?: unknown): void {
 
 function snapshot(): PanelSnapshot {
   return {
-    playback: source.state(),
+    mode,
+    playback: mockSource.state(),
+    live: { ...liveSource.state(), keytermsText, configAdvice: sttConfigAdvice },
     llm: llmStatus,
     pluginsConnected: bridge.connectedCount(),
     keys: slots.getAll().map((k, i) => ({ ...k, term: slots.termAt(i) ?? undefined })),
@@ -146,23 +177,18 @@ slots.on("change", (keys: KeyState[]) => {
   pushSnapshot();
 });
 
-source.on("line", (line: MeetingLine) => {
+/** A spoken line from either source (mock: with terms; live: finals, no terms yet). */
+function onLine(line: LiveLine): void {
   transcript.add(line);
   const pl: PanelLine = { t: line.t, speaker: line.speaker, text: line.text, terms: line.terms };
   playedLines.push(pl);
-  log(`[${mmss(line.t)}] ${line.speaker}: ${line.text}`);
+  log(`[${mmss(line.t)}] ${line.speaker ?? "?"}: ${line.text}`);
   send("line", pl);
-});
+}
 
-source.on("term", (c: TermCandidate) => {
-  log(`term "${c.term}" (${c.category}, ${c.source})`);
-  slots.add(c);
-});
-
-source.on("unknownTerm", (term: string) => log(`WARNING: term "${term}" is not in mock/glossary.json, skipped`));
-
-source.on("restart", () => {
-  log("restart");
+/** A new meeting: mock Restart, Start listening, or a Mock/Live switch. */
+function resetMeeting(why: string): void {
+  log(`reset (${why})`);
   catchUp.cancel();
   saver.reset();
   overlay.hide("restart");
@@ -170,10 +196,46 @@ source.on("restart", () => {
   transcript.clear();
   playedLines.length = 0;
   send("reset");
-});
+}
 
-source.on("state", pushSnapshot);
-source.on("end", () => log("meeting finished"));
+mockSource.on("line", onLine);
+mockSource.on("term", (c: TermCandidate) => {
+  log(`term "${c.term}" (${c.category}, ${c.source})`);
+  slots.add(c);
+});
+mockSource.on("unknownTerm", (term: string) => log(`WARNING: term "${term}" is not in mock/glossary.json, skipped`));
+mockSource.on("restart", () => resetMeeting("restart"));
+mockSource.on("state", pushSnapshot);
+mockSource.on("end", () => log("meeting finished"));
+
+liveSource.on("line", onLine);
+liveSource.on("restart", () => resetMeeting("start listening"));
+liveSource.on("interim", (i: LiveInterim | null) => send("interim", i));
+liveSource.on("level", (db: number) => send("level", Number.isFinite(db) ? db : -100));
+liveSource.on("state", pushSnapshot);
+liveSource.on("end", () => log("listening stopped"));
+
+async function setMode(m: PanelMode): Promise<void> {
+  if (m === mode) return;
+  if (m === "live") mockSource.rewind();
+  else await liveSource.stop();
+  mode = m;
+  resetMeeting(`mode ${m}`);
+  pushSnapshot();
+}
+
+function startListening(text: string): void {
+  if (mode !== "live" || liveSource.isListening()) return;
+  keytermsText = text;
+  if (!sttFactory) {
+    log(`[stt] cannot start: ${sttConfigAdvice}`);
+    pushSnapshot();
+    return;
+  }
+  const keyterms = parseKeyterms(text);
+  log(`listening${keyterms.length ? ` (keyterms: ${keyterms.join(", ")})` : ""}`);
+  liveSource.start(keyterms);
+}
 
 bridge.on("press", ({ slot }: PressEvent) => {
   const received = performance.now();
@@ -229,23 +291,36 @@ bridge.on("disconnected", pushSnapshot);
 
 ipcMain.handle("panel:init", () => ({ snapshot: snapshot(), lines: playedLines, listener: config.listenerName }));
 
-ipcMain.on("panel:control", (_e, cmd: PanelCommand) => {
-  log(`panel: ${cmd}`);
+ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
+  if (cmd !== "keyterms") log(`panel: ${cmd}`);
   switch (cmd) {
     case "play":
-      source.play();
+      if (mode === "mock") mockSource.play();
       break;
     case "pause":
-      source.pause();
+      mockSource.pause();
       break;
     case "restart":
-      source.restart();
+      if (mode === "mock") mockSource.restart();
       break;
     case "speed1":
-      source.setSpeed(1);
+      mockSource.setSpeed(1);
       break;
     case "speed2":
-      source.setSpeed(2);
+      mockSource.setSpeed(2);
+      break;
+    case "mode-mock":
+    case "mode-live":
+      void setMode(cmd === "mode-live" ? "live" : "mock");
+      break;
+    case "listen-start":
+      startListening(typeof arg === "string" ? arg : keytermsText);
+      break;
+    case "listen-stop":
+      void liveSource.stop();
+      break;
+    case "keyterms":
+      if (typeof arg === "string") keytermsText = arg;
       break;
   }
 });
@@ -294,9 +369,13 @@ app.whenReady().then(async () => {
   createPanel();
   void runWarmUp();
   log(`ready: ${meeting.length} lines, ${Object.keys(glossary).length} glossary terms, listener "${config.listenerName}". Press Play in the panel.`);
-  if (process.env.AUTOPLAY === "1") source.play(); // AUTOPLAY=1 npm run dev: start the meeting right away
+  if (process.env.AUTOPLAY === "1") mockSource.play(); // AUTOPLAY=1 npm run dev: start the meeting right away
+  if (process.env.AUTOLISTEN === "1") {
+    // AUTOLISTEN=1 npm run dev: Live mode, listening right away
+    void setMode("live").then(() => startListening(keytermsText));
+  }
   setInterval(() => {
-    if (source.state().playing) pushSnapshot();
+    if (mockSource.state().playing || liveSource.isListening()) pushSnapshot();
   }, 500);
 });
 
@@ -304,7 +383,9 @@ app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
   catchUp.cancel();
   saver.reset();
-  source.dispose();
+  mockSource.dispose();
+  audio.killNow(); // never leave audiotee running after the app quits
+  void liveSource.dispose();
   overlay.dispose();
   overlayWindow?.destroy();
   slots.dispose();

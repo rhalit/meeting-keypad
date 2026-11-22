@@ -1,7 +1,7 @@
-/** A spoken line; `t` is meeting time in seconds. */
+/** A spoken line; `t` is meeting time in seconds. Live lines may have no speaker. */
 export interface TranscriptLine {
   t: number;
-  speaker: string;
+  speaker?: string;
   text: string;
 }
 
@@ -9,7 +9,7 @@ export class TranscriptBuffer {
   private lines: TranscriptLine[] = [];
 
   add(line: TranscriptLine): void {
-    this.lines.push({ t: line.t, speaker: line.speaker, text: line.text });
+    this.lines.push(line.speaker === undefined ? { t: line.t, text: line.text } : { t: line.t, speaker: line.speaker, text: line.text });
   }
 
   /** Lines from the last `seconds` seconds, measured back from `now` (default: the latest line). */

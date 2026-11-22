@@ -77,6 +77,15 @@ export class MockSource extends EventEmitter {
     this.emitState();
   }
 
+  /** Back to 0, paused (switching to Live). Emits `state`, not `restart`. */
+  rewind(): void {
+    this.clearTimer();
+    this.playing = false;
+    this.pos = 0;
+    this.next = 0;
+    this.emitState();
+  }
+
   /** Back to 0 and play. */
   restart(): void {
     this.clearTimer();

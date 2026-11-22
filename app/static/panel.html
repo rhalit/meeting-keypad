@@ -8,12 +8,27 @@
   </head>
   <body>
     <header>
-      <div class="controls">
+      <div class="modes" role="tablist">
+        <button id="mode-mock" class="active">Mock meeting</button><button id="mode-live">Live meeting</button>
+      </div>
+      <div id="mock-controls" class="controls">
         <button id="play" class="primary">Play</button>
         <button id="restart">Restart</button>
         <span class="speed">
           <button id="speed1" class="active">1x</button><button id="speed2">2x</button>
         </span>
+      </div>
+      <div id="live-controls" class="live" hidden>
+        <div class="controls">
+          <button id="listen" class="primary">Start listening</button>
+          <input id="keyterms" type="text" placeholder="Meeting topic / keyterms, comma-separated" spellcheck="false" />
+        </div>
+        <div class="audio-row">
+          <div class="meter" title="System audio level"><div id="meter-fill"></div></div>
+          <span id="audio-text">Audio: off</span>
+        </div>
+        <div class="status"><span id="stt-text">Speech-to-text: idle</span></div>
+        <div id="live-error" class="llm-banner" hidden></div>
       </div>
       <div class="status">
         <span id="time">0:00 / 0:00</span>

@@ -1,5 +1,7 @@
+import type { AudioStatus } from "../pipeline/audioCapture.js";
 import type { PlaybackState } from "../pipeline/mockSource.js";
 import type { KeyState } from "../pipeline/protocol.js";
+import type { SttStatus } from "../pipeline/stt.js";
 
 // Messages between main and the control panel. src/renderer/panel.ts mirrors these shapes
 // (it is a plain browser script and cannot import).
@@ -18,8 +20,26 @@ export interface PanelLlm {
   advice?: string;
 }
 
+export type PanelMode = "mock" | "live";
+
+export interface PanelLive {
+  listening: boolean;
+  /** Meeting seconds since Start listening (frozen after Stop). */
+  position: number;
+  audio: AudioStatus;
+  stt: SttStatus;
+  /** Keyterms of the current / last session. */
+  keyterms: string[];
+  /** The "meeting topic / keyterms" field. */
+  keytermsText: string;
+  /** Set when Deepgram is not configured (Start is refused). */
+  configAdvice?: string;
+}
+
 export interface PanelSnapshot {
+  mode: PanelMode;
   playback: PlaybackState;
+  live: PanelLive;
   llm: PanelLlm;
   pluginsConnected: number;
   keys: PanelKey[];
@@ -28,9 +48,28 @@ export interface PanelSnapshot {
 
 export interface PanelLine {
   t: number;
-  speaker: string;
+  speaker?: string;
   text: string;
   terms: string[];
 }
 
-export type PanelCommand = "play" | "pause" | "restart" | "speed1" | "speed2";
+/** Live, not yet final; `null` clears it. */
+export interface PanelInterim {
+  t: number;
+  speaker?: string;
+  text: string;
+}
+
+export type PanelCommand =
+  | "play"
+  | "pause"
+  | "restart"
+  | "speed1"
+  | "speed2"
+  | "mode-mock"
+  | "mode-live"
+  /** arg: the keyterms text */
+  | "listen-start"
+  | "listen-stop"
+  /** arg: the keyterms text (remembered while typing) */
+  | "keyterms";

@@ -20,8 +20,24 @@ interface PanelLlmMsg {
   text: string;
   advice?: string;
 }
+interface PanelStatusMsg {
+  state: string;
+  text: string;
+  advice?: string;
+}
+interface PanelLiveMsg {
+  listening: boolean;
+  position: number;
+  audio: PanelStatusMsg;
+  stt: PanelStatusMsg;
+  keyterms: string[];
+  keytermsText: string;
+  configAdvice?: string;
+}
 interface PanelSnapshotMsg {
+  mode: "mock" | "live";
   playback: PanelPlayback;
+  live: PanelLiveMsg;
   llm: PanelLlmMsg;
   pluginsConnected: number;
   keys: PanelKey[];
@@ -29,14 +45,19 @@ interface PanelSnapshotMsg {
 }
 interface PanelLineMsg {
   t: number;
-  speaker: string;
+  speaker?: string;
   text: string;
   terms: string[];
 }
+interface PanelInterimMsg {
+  t: number;
+  speaker?: string;
+  text: string;
+}
 interface KeypadApi {
   init(): Promise<{ snapshot: PanelSnapshotMsg; lines: PanelLineMsg[]; listener: string }>;
-  control(cmd: string): void;
-  on(channel: "snapshot" | "line" | "reset", cb: (payload: any) => void): void;
+  control(cmd: string, arg?: string): void;
+  on(channel: "snapshot" | "line" | "reset" | "interim" | "level", cb: (payload: any) => void): void;
 }
 interface Window {
   keypad: KeypadApi;
@@ -56,15 +77,77 @@ const llmErrorEl = $("llm-error");
 const gridEl = $("grid");
 const queueEl = $("queue");
 const transcriptEl = $("transcript");
+const modeMockBtn = $<HTMLButtonElement>("mode-mock");
+const modeLiveBtn = $<HTMLButtonElement>("mode-live");
+const mockControls = $("mock-controls");
+const liveControls = $("live-controls");
+const listenBtn = $<HTMLButtonElement>("listen");
+const keytermsEl = $<HTMLInputElement>("keyterms");
+const meterFill = $("meter-fill");
+const audioText = $("audio-text");
+const sttText = $("stt-text");
+const liveError = $("live-error");
 
 let playing = false;
+let mode: "mock" | "live" = "mock";
+let listening = false;
+let keytermsTouched = false;
+let lastLoudAt = 0;
+let audioState = "stopped";
+let audioStatusText = "Audio: off";
+let interimEl: HTMLElement | null = null;
+
+const AUDIO_OK = ["running", "silent"];
+const LOUD_DB = -50;
+
+function renderAudioText(): void {
+  const receiving = listening && Date.now() - lastLoudAt < 1500;
+  if (receiving && AUDIO_OK.includes(audioState)) {
+    audioText.textContent = "Receiving audio";
+    audioText.className = "ok";
+    return;
+  }
+  audioText.textContent = audioState === "running" ? "Audio: capturing, silence" : audioStatusText;
+  audioText.className =
+    audioState === "running" || audioState === "stopped" || audioState === "starting"
+      ? ""
+      : audioState === "missing" || audioState === "error"
+        ? "err"
+        : "warn";
+}
+
+function renderLive(s: PanelSnapshotMsg): void {
+  const l = s.live;
+  listening = l.listening;
+  listenBtn.textContent = listening ? "Stop listening" : "Start listening";
+  listenBtn.classList.toggle("stop", listening);
+  listenBtn.disabled = !listening && !!l.configAdvice;
+  keytermsEl.disabled = listening;
+  if (!keytermsTouched && document.activeElement !== keytermsEl) keytermsEl.value = l.keytermsText;
+  audioState = l.audio.state;
+  audioStatusText = l.audio.text;
+  renderAudioText();
+  sttText.textContent = l.configAdvice ? "Speech-to-text: not configured" : l.stt.text;
+  sttText.className = l.configAdvice || l.stt.state === "error" ? "err" : l.stt.state === "open" ? "ok" : listening ? "wait" : "";
+  const advice = l.configAdvice ?? l.stt.advice ?? (listening || l.audio.state === "missing" ? l.audio.advice : undefined);
+  liveError.hidden = !advice;
+  liveError.textContent = advice ?? "";
+  if (!listening) meterFill.style.width = "0";
+}
 
 function renderSnapshot(s: PanelSnapshotMsg): void {
+  mode = s.mode;
+  modeMockBtn.classList.toggle("active", mode === "mock");
+  modeLiveBtn.classList.toggle("active", mode === "live");
+  mockControls.hidden = mode !== "mock";
+  liveControls.hidden = mode !== "live";
+  renderLive(s);
   playing = s.playback.playing;
   playBtn.textContent = playing ? "Pause" : s.playback.ended ? "Play again" : "Play";
   speed1Btn.classList.toggle("active", s.playback.speed === 1);
   speed2Btn.classList.toggle("active", s.playback.speed === 2);
-  timeEl.textContent = `${fmt(s.playback.position)} / ${fmt(s.playback.duration)}`;
+  timeEl.textContent =
+    mode === "live" ? `${fmt(s.live.position)}${listening ? " · listening" : ""}` : `${fmt(s.playback.position)} / ${fmt(s.playback.duration)}`;
   pluginEl.textContent = s.pluginsConnected > 0 ? "Keypad connected" : "Keypad not connected";
   pluginEl.classList.toggle("ok", s.pluginsConnected > 0);
   llmEl.textContent = s.llm.text;
@@ -112,8 +195,7 @@ function appendHighlighted(parent: HTMLElement, text: string, terms: string[]): 
   parent.append(text.slice(pos));
 }
 
-function addLine(l: PanelLineMsg): void {
-  const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 40;
+function lineRow(l: { t: number; speaker?: string; text: string }, terms: string[]): HTMLElement {
   const row = document.createElement("div");
   row.className = "line";
   const time = document.createElement("span");
@@ -121,23 +203,79 @@ function addLine(l: PanelLineMsg): void {
   time.textContent = fmt(l.t);
   const who = document.createElement("span");
   who.className = "who";
-  who.textContent = l.speaker;
+  who.textContent = l.speaker ?? "";
   const text = document.createElement("span");
   text.className = "text";
-  appendHighlighted(text, l.text, l.terms);
+  appendHighlighted(text, l.text, terms);
   row.append(time, who, text);
-  transcriptEl.append(row);
+  return row;
+}
+
+function keepScrolled(fn: () => void): void {
+  const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 40;
+  fn();
   if (atBottom) transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
+function addLine(l: PanelLineMsg): void {
+  keepScrolled(() => {
+    const row = lineRow(l, l.terms);
+    if (interimEl) transcriptEl.insertBefore(row, interimEl);
+    else transcriptEl.append(row);
+  });
+}
+
+/** Live text that is not final yet: one grey row at the bottom, replaced each time. */
+function setInterim(i: PanelInterimMsg | null): void {
+  keepScrolled(() => {
+    if (!i) {
+      interimEl?.remove();
+      interimEl = null;
+      return;
+    }
+    const row = lineRow(i, []);
+    row.classList.add("interim");
+    if (interimEl) interimEl.replaceWith(row);
+    else transcriptEl.append(row);
+    interimEl = row;
+  });
+}
+
+function setLevel(db: number): void {
+  if (!listening) return;
+  const pct = Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+  meterFill.style.width = `${pct}%`;
+  if (db > LOUD_DB) lastLoudAt = Date.now();
+  renderAudioText();
+}
+
 playBtn.addEventListener("click", () => window.keypad.control(playing ? "pause" : "play"));
+modeMockBtn.addEventListener("click", () => window.keypad.control("mode-mock"));
+modeLiveBtn.addEventListener("click", () => window.keypad.control("mode-live"));
+listenBtn.addEventListener("click", () => {
+  if (listening) window.keypad.control("listen-stop");
+  else window.keypad.control("listen-start", keytermsEl.value);
+});
+keytermsEl.addEventListener("input", () => {
+  keytermsTouched = true;
+  window.keypad.control("keyterms", keytermsEl.value);
+});
+keytermsEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !listening) window.keypad.control("listen-start", keytermsEl.value);
+});
 restartBtn.addEventListener("click", () => window.keypad.control("restart"));
 speed1Btn.addEventListener("click", () => window.keypad.control("speed1"));
 speed2Btn.addEventListener("click", () => window.keypad.control("speed2"));
 
 window.keypad.on("snapshot", renderSnapshot);
 window.keypad.on("line", addLine);
-window.keypad.on("reset", () => transcriptEl.replaceChildren());
+window.keypad.on("reset", () => {
+  interimEl = null;
+  transcriptEl.replaceChildren();
+});
+window.keypad.on("interim", setInterim);
+window.keypad.on("level", setLevel);
+setInterval(renderAudioText, 500); // "Receiving audio" fades back when the level drops
 
 void window.keypad.init().then(({ snapshot, lines }) => {
   renderSnapshot(snapshot);

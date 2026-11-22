@@ -33,6 +33,11 @@ Phase 2b is done: a term key opens the overlay card (`app/src/pipeline/overlay.t
 Phase 2c: Catch-up (slot 6) and Save (slot 7) work on the mock meeting through an
 OpenAI-compatible LLM (`app/src/pipeline/llm.ts`, controllers `catchUp.ts` / `save.ts`).
 Save appends to `output/saved-ideas.md` (gitignored). "Was that for me?" (slot 8) is not built yet.
+Phase 3a: live transcript. The panel has a Mock / Live switch. In Live mode, `LiveSource`
+(`app/src/pipeline/liveSource.ts`) runs audiotee (`audioCapture.ts`, system audio, 16 kHz PCM)
+into Deepgram nova-3 (`stt.ts`). Final utterances become TranscriptBuffer lines `{t, speaker?, text}`,
+and interim text only goes to the panel. Live mode spots no terms yet (that is 3b), so slots 0–5 stay empty.
+Catch-up and Save work on the live transcript.
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -47,7 +52,14 @@ Do not build features from later phases unless asked.
 - App: `cd app && npm install && npm run dev` (control panel + WebSocket server), `npm test`.
 - Real model smoke run (Catch-up + Save on the mock transcript): `cd app && npm run smoke`
   (writes `output/smoke-saved-ideas.md`). Tests never call a real model (`test/fakeLlm.ts`).
-  `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play.
+  `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play; `AUTOLISTEN=1 npm run dev` starts Live listening.
+- audiotee (once per machine): `cd app && npm run build:audiotee` → `tools/audiotee/bin/audiotee`
+  (pinned commit in `tools/audiotee/VERSION`, see `tools/audiotee/README.md`).
+- Live smoke run (plays the mock meeting voiced by `say` through the speakers, real audiotee + Deepgram):
+  `cd app && npm run smoke:live` (add `-- --keyterms` for glossary keyterms, `-- --lines 8` for a short run).
+  Audio is cached in `tools/mock-audio/` (gitignored). Needs the system audio permission for the terminal.
+- System audio permission: System Settings → Privacy & Security → Screen & System Audio Recording →
+  "System Audio Recording Only" → the app that started the app (Terminal for `npm run dev`).
 
 ## Logi Actions SDK docs
 - Index for AI tools: https://logitech.github.io/actions-sdk-docs/llms.txt
@@ -68,7 +80,9 @@ Do not build features from later phases unless asked.
 - A term placed on a key never moves to another key.
 - Never commit `app/.env`, never print or log the key. LLM settings live there:
   `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
-  (see `app/.env.example` for Groq / Ollama / OpenRouter). Deepgram arrives in Phase 3.
+  (see `app/.env.example` for Groq / Ollama / OpenRouter). Speech-to-text: `DEEPGRAM_API_KEY`
+  (never logged, sent only as a header), optional `DEEPGRAM_LANGUAGE` (`en` default, `multi` for English/French),
+  `DEEPGRAM_DIARIZE`, `DEEPGRAM_ENDPOINTING_MS`, `AUDIOTEE_PATH`.
 - The human checks the physical keypad. After every plugin change: build, then say exactly
   what should be visible on which key.
 - LLM: any OpenAI-compatible chat API from `app/.env` (currently Groq `openai/gpt-oss-120b`).
@@ -76,7 +90,10 @@ Do not build features from later phases unless asked.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
-- `mock/config.json`: `{ "listenerName": "..." }`; meeting lines say `{listener}` where a speaker addresses them.
+- `mock/config.json`: `{ "listenerName": "...", "keyterms": [] }`; meeting lines say `{listener}` where a speaker
+  addresses them. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
+- Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end? }`, where `t` = meeting seconds since Start listening
+  and `speaker` = "Speaker N" from Deepgram diarization.
 - `mock/glossary.json`: `{ "<term>": { "label", "full", "explanation", "example", "category" } }`
 - Term event (every source, mock or live): `TermCandidate { term, label, category, source: "mock" | "live" }`
   in `app/src/pipeline/terms.ts`.

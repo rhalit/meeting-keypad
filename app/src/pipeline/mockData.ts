@@ -23,6 +23,8 @@ export type Glossary = Record<string, GlossaryEntry>;
 export interface MockConfig {
   /** The person using the keypad; speakers address them by this name. */
   listenerName: string;
+  /** "Meeting topic / keyterms" for live speech-to-text (Deepgram keyterms). Optional. */
+  keyterms: string[];
 }
 
 export const LISTENER_PLACEHOLDER = "{listener}";
@@ -36,7 +38,9 @@ export function loadConfig(path: string): MockConfig {
   if (typeof raw.listenerName !== "string" || raw.listenerName.trim() === "") {
     throw new Error(`${path}: "listenerName" must be a non-empty string`);
   }
-  return { listenerName: raw.listenerName.trim() };
+  const k = (raw as { keyterms?: unknown }).keyterms;
+  const keyterms = Array.isArray(k) ? k.map(String) : typeof k === "string" ? [k] : [];
+  return { listenerName: raw.listenerName.trim(), keyterms };
 }
 
 /** Reads meeting.json and fills in the listener's name. */

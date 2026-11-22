@@ -9,9 +9,12 @@ export function mmss(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** `[m:ss] Speaker: text`, one line each. With `seconds`, the tag is `[t=123]` instead. */
+/**
+ * `[m:ss] Speaker: text`, one line each (`[m:ss] text` when the speaker is unknown, as in live
+ * lines without diarization). With `seconds`, the tag is `[t=123]` instead.
+ */
 export function formatTranscript(lines: TranscriptLine[], opts: { seconds?: boolean } = {}): string {
-  return lines.map((l) => `[${opts.seconds ? `t=${l.t}` : mmss(l.t)}] ${l.speaker}: ${l.text}`).join("\n");
+  return lines.map((l) => `[${opts.seconds ? `t=${l.t}` : mmss(l.t)}] ${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
 }
 
 export function catchUpMessages(lines: TranscriptLine[], listenerName?: string): ChatMessage[] {

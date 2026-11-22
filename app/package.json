@@ -9,7 +9,9 @@
     "dev": "npm run build && electron .",
     "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "test": "vitest run",
-    "smoke": "npm run build && node dist/tools/smoke.js"
+    "smoke": "npm run build && node dist/tools/smoke.js",
+    "smoke:live": "npm run build && node dist/tools/liveSmoke.js",
+    "build:audiotee": "../tools/audiotee/build.sh"
   },
   "dependencies": {
     "ws": "8.22.1"
