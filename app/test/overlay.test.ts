@@ -175,3 +175,32 @@ describe("OverlayController", () => {
     });
   });
 });
+
+describe("OverlayController pending live cards", () => {
+  it("refresh() fills in only the visible card of that term", () => {
+    const clock = new FakeClock();
+    let pending = true;
+    const entry = () => ({ label: "SOC 2", full: "SOC 2", category: "Security" as const, example: "x", explanation: pending ? "Explaining…" : "Done.", pending });
+    const overlay = new OverlayController({ clock, lookup: (t) => (t === "SOC 2" ? entry() : glossary[t]) });
+    const updates: TermCard[] = [];
+    overlay.on("update", (c: TermCard) => updates.push(c));
+    overlay.press(term(0, "SOC 2"));
+    expect((overlay.current() as TermCard).durationMs).toBeNull();
+    expect(overlay.refresh("RAG")).toBe(false);
+    expect(overlay.refresh("SOC 2")).toBe(true); // still pending: stays pending, no timer
+    expect(updates[0].pending).toBe(true);
+    expect(clock.pending()).toBe(0);
+    pending = false;
+    expect(overlay.refresh("soc 2")).toBe(true);
+    expect(updates[1]).toMatchObject({ explanation: "Done.", pending: false, durationMs: 15_000 });
+    expect(updates[1].id).toBe(updates[0].id);
+    clock.advance(15_000);
+    expect(overlay.current()).toBeNull();
+  });
+
+  it("glossary cards are never pending", () => {
+    const overlay = new OverlayController({ clock: new FakeClock(), lookup: (t) => glossary[t] });
+    overlay.press(term(0, "RAG"));
+    expect(overlay.current()).toMatchObject({ pending: false, durationMs: 15_000 });
+  });
+});

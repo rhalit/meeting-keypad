@@ -1,7 +1,7 @@
 {
   "name": "meeting-keypad-app",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Meeting Keypad app: pipeline, keypad WebSocket server and control panel",
   "main": "dist/main/main.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "test": "vitest run",
     "smoke": "npm run build && node dist/tools/smoke.js",
     "smoke:live": "npm run build && node dist/tools/liveSmoke.js",
+    "eval:terms": "npm run build && node dist/tools/evalTerms.js",
     "build:audiotee": "../tools/audiotee/build.sh"
   },
   "dependencies": {

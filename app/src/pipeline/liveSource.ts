@@ -3,7 +3,7 @@ import type { AudioInput, AudioStatus } from "./audioCapture.js";
 import type { Clock } from "./clock.js";
 import { BYTES_PER_SECOND, type SttFactory, type SttSegment, type SttSession, type SttStatus } from "./stt.js";
 
-/** A final utterance, same shape as a mock meeting line (no terms until Phase 3b). */
+/** A final utterance, same shape as a mock meeting line. `terms` stays empty: TermSpotter finds them. */
 export interface LiveLine {
   /** Meeting seconds at which the utterance started. */
   t: number;
@@ -41,7 +41,8 @@ export interface LiveSourceOptions {
  * Live meeting audio → transcript. Same events as MockSource where they overlap:
  * `restart` (a new meeting starts: clear transcript and keys), `line` (LiveLine, finals only),
  * `state` (LiveState), `end` (Stop). Plus `interim` (LiveInterim | null to clear) and `level`
- * (dBFS). Meeting time 0 is the moment Start was pressed. No `term` events yet (Phase 3b).
+ * (dBFS). Meeting time 0 is the moment Start was pressed. No `term` events: main feeds the lines to
+ * TermSpotter (Phase 3b), which emits the live TermCandidates.
  */
 export class LiveSource extends EventEmitter {
   private listening = false;

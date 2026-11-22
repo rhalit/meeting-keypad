@@ -33,6 +33,8 @@ interface PanelLiveMsg {
   keyterms: string[];
   keytermsText: string;
   configAdvice?: string;
+  spotter: PanelStatusMsg;
+  learnedKeyterms: string[];
 }
 interface PanelSnapshotMsg {
   mode: "mock" | "live";
@@ -87,6 +89,8 @@ const meterFill = $("meter-fill");
 const audioText = $("audio-text");
 const sttText = $("stt-text");
 const liveError = $("live-error");
+const spotterText = $("spotter-text");
+const learnedEl = $("learned");
 
 let playing = false;
 let mode: "mock" | "live" = "mock";
@@ -132,6 +136,11 @@ function renderLive(s: PanelSnapshotMsg): void {
   const advice = l.configAdvice ?? l.stt.advice ?? (listening || l.audio.state === "missing" ? l.audio.advice : undefined);
   liveError.hidden = !advice;
   liveError.textContent = advice ?? "";
+  spotterText.textContent = l.spotter.text;
+  spotterText.className = l.spotter.state === "error" ? "err" : l.spotter.state === "backoff" ? "warn" : l.spotter.state === "ok" ? "ok" : "";
+  spotterText.title = l.spotter.advice ?? "";
+  learnedEl.hidden = l.learnedKeyterms.length === 0;
+  learnedEl.textContent = `Learned keyterms (used at next Start): ${l.learnedKeyterms.join(", ")}`;
   if (!listening) meterFill.style.width = "0";
 }
 

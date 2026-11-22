@@ -5,7 +5,9 @@ import {
   OpenAiCompatClient,
   errorAdvice,
   loadLlmConfig,
+  loadSpotterLlmConfig,
   parseSseLine,
+  spotterIntervalMs,
   warmUp,
   withTimeout,
   type LlmConfig,
@@ -325,5 +327,24 @@ describe("warmUp", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(errorAdvice(r.error)).toBe("LLM_API_KEY is empty in app/.env. Add it, then restart the app.");
     expect((await caught(collect(c.stream()))).kind).toBe("config");
+  });
+});
+
+describe("spotter config", () => {
+  const base = { LLM_BASE_URL: "https://api.groq.com/openai/v1", LLM_MODEL: "openai/gpt-oss-120b", LLM_API_KEY: "k", LLM_REASONING_EFFORT: "low" };
+  it("uses LLM_SPOTTER_MODEL and its own reasoning / JSON settings", () => {
+    const c = loadSpotterLlmConfig({ ...base, LLM_SPOTTER_MODEL: "llama-3.1-8b-instant", LLM_SPOTTER_JSON_MODE: "object" });
+    expect(c).toMatchObject({ model: "llama-3.1-8b-instant", reasoningEffort: undefined, jsonMode: "object", apiKey: "k" });
+    const d = loadSpotterLlmConfig({ ...base, LLM_SPOTTER_MODEL: "openai/gpt-oss-20b", LLM_SPOTTER_REASONING_EFFORT: "low" });
+    expect(d).toMatchObject({ model: "openai/gpt-oss-20b", reasoningEffort: "low", jsonMode: "schema" });
+  });
+  it("falls back to LLM_MODEL (and its reasoning effort) when unset", () => {
+    expect(loadSpotterLlmConfig(base)).toMatchObject({ model: "openai/gpt-oss-120b", reasoningEffort: "low" });
+  });
+  it("reads LLM_SPOTTER_INTERVAL_MS, default 8000", () => {
+    expect(spotterIntervalMs({})).toBe(8000);
+    expect(spotterIntervalMs({ LLM_SPOTTER_INTERVAL_MS: "5000" })).toBe(5000);
+    expect(spotterIntervalMs({ LLM_SPOTTER_INTERVAL_MS: "abc" })).toBe(8000);
+    expect(spotterIntervalMs({ LLM_SPOTTER_INTERVAL_MS: "10" })).toBe(8000);
   });
 });

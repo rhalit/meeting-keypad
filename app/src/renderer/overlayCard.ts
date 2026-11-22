@@ -11,7 +11,9 @@ interface OverlayTermMsg {
   color: string;
   explanation: string;
   example: string;
-  durationMs: number;
+  /** Live term whose explanation is still on its way ("Explaining…"). */
+  pending: boolean;
+  durationMs: number | null;
 }
 interface OverlayTextMsg {
   kind: "text";
@@ -43,6 +45,7 @@ interface Window {
   const chip = el<HTMLSpanElement>("chip");
   const explanation = el<HTMLParagraphElement>("explanation");
   const example = el<HTMLQuoteElement>("example");
+  const exampleLabel = el<HTMLDivElement>("example-label");
   const textEyebrow = el<HTMLDivElement>("text-eyebrow");
   const textTitle = el<HTMLHeadingElement>("text-title");
   const textBody = el<HTMLDivElement>("text-body");
@@ -118,7 +121,15 @@ interface Window {
       chip.textContent = c.category;
       chip.style.backgroundColor = c.color;
       explanation.textContent = c.explanation;
+      explanation.classList.toggle("thinking", c.pending);
+      if (c.pending) {
+        const caret = document.createElement("span");
+        caret.className = "caret";
+        explanation.append(caret);
+      }
       example.textContent = c.example;
+      example.hidden = c.example === "";
+      exampleLabel.hidden = c.example === "";
     } else {
       card.dataset.tone = c.tone;
       textEyebrow.textContent = c.eyebrow;

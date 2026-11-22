@@ -2,6 +2,7 @@ import type { AudioStatus } from "../pipeline/audioCapture.js";
 import type { PlaybackState } from "../pipeline/mockSource.js";
 import type { KeyState } from "../pipeline/protocol.js";
 import type { SttStatus } from "../pipeline/stt.js";
+import type { SpotterStatus } from "../pipeline/termSpotter.js";
 
 // Messages between main and the control panel. src/renderer/panel.ts mirrors these shapes
 // (it is a plain browser script and cannot import).
@@ -34,6 +35,10 @@ export interface PanelLive {
   keytermsText: string;
   /** Set when Deepgram is not configured (Start is refused). */
   configAdvice?: string;
+  /** Live term spotter (LLM_SPOTTER_MODEL). */
+  spotter: SpotterStatus;
+  /** Spotted terms, added to the keyterms at the next Start listening. */
+  learnedKeyterms: string[];
 }
 
 export interface PanelSnapshot {

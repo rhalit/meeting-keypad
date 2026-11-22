@@ -26,6 +26,16 @@ export interface JsonSpec<T> {
   validate: (value: unknown) => T;
 }
 
+/** Token counts of one call, when the server reports them. */
+export interface LlmUsage {
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Prompt tokens served from the provider's prompt cache (Groq does not count them against limits). */
+  cachedTokens: number;
+}
+
 export interface LlmClient {
   /** "model @ host", for logs and the panel. Never contains the key. */
   describe(): string;
@@ -81,6 +91,31 @@ export interface LlmConfig {
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Config for the term spotter: same server and key as LLM_*, but LLM_SPOTTER_MODEL (falls back to
+ * LLM_MODEL), LLM_SPOTTER_REASONING_EFFORT (falls back to LLM_REASONING_EFFORT only when the model is
+ * the same) and LLM_SPOTTER_JSON_MODE (falls back to LLM_JSON_MODE).
+ */
+export function loadSpotterLlmConfig(env: Record<string, string | undefined>): LlmConfig {
+  const model = (env.LLM_SPOTTER_MODEL ?? "").trim();
+  const sameModel = !model || model === (env.LLM_MODEL ?? "").trim();
+  const effort = (env.LLM_SPOTTER_REASONING_EFFORT ?? "").trim();
+  const jsonMode = (env.LLM_SPOTTER_JSON_MODE ?? "").trim();
+  return loadLlmConfig({
+    ...env,
+    LLM_MODEL: model || env.LLM_MODEL,
+    LLM_REASONING_EFFORT: effort || (sameModel ? env.LLM_REASONING_EFFORT : ""),
+    LLM_JSON_MODE: jsonMode || env.LLM_JSON_MODE,
+  });
+}
+
+/** LLM_SPOTTER_INTERVAL_MS: minimum time between two spotter calls (default 8000, at least 1000). */
+export function spotterIntervalMs(env: Record<string, string | undefined>): number {
+  const raw = (env.LLM_SPOTTER_INTERVAL_MS ?? "").trim();
+  const n = Number(raw);
+  return raw !== "" && Number.isFinite(n) && n >= 1000 ? Math.round(n) : 8000;
+}
 
 /** Reads the LLM_* variables. Throws LlmError("config") with a fix-it message. */
 export function loadLlmConfig(env: Record<string, string | undefined>): LlmConfig {
@@ -139,6 +174,8 @@ export class OpenAiCompatClient implements LlmClient {
     private readonly cfg: LlmConfig,
     private readonly fetchImpl: FetchLike = (u, i) => fetch(u, i),
     private readonly log: (msg: string) => void = () => {},
+    /** Called with the token counts of every non-streaming call that reports them. */
+    private readonly onUsage?: (u: LlmUsage) => void,
   ) {
     this.jsonMode = cfg.jsonMode;
   }
@@ -229,6 +266,16 @@ export class OpenAiCompatClient implements LlmClient {
       obj = await res.json();
     } catch {
       throw this.abortOr(req.signal, () => this.err("bad_response", "The response was not JSON"));
+    }
+    const u = obj?.usage;
+    if (this.onUsage && u && typeof u.total_tokens === "number") {
+      this.onUsage({
+        model: this.cfg.model,
+        promptTokens: Number(u.prompt_tokens) || 0,
+        completionTokens: Number(u.completion_tokens) || 0,
+        totalTokens: u.total_tokens,
+        cachedTokens: Number(u.prompt_tokens_details?.cached_tokens) || 0,
+      });
     }
     const content = obj?.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw this.err("bad_response", "The response had no message content");

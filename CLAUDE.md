@@ -23,7 +23,8 @@ Key layout (slot numbers are used everywhere, see protocol/messages.md):
   - Renderer: overlay card (always on top, never steals focus) and a small control panel.
 - `protocol/messages.md` – the contract between plugin and app. Change it FIRST, then both sides.
 - `mock/` – scripted meeting (`meeting.json`), `glossary.json`, optional `meeting.mp3` ("Demo mode").
-- `tools/` – `fake-core.mjs` (stand-in app for testing the plugin), `eval-terms.ts` (later).
+- `tools/` – `fake-core.mjs` (stand-in app for testing the plugin). The term eval lives in
+  `app/src/tools/evalTerms.ts` (compiled with the app).
 
 ## Current phase
 Phase 2: the scripted mock meeting (`mock/`) drives the keys end to end
@@ -36,8 +37,13 @@ Save appends to `output/saved-ideas.md` (gitignored). "Was that for me?" (slot 8
 Phase 3a: live transcript. The panel has a Mock / Live switch. In Live mode, `LiveSource`
 (`app/src/pipeline/liveSource.ts`) runs audiotee (`audioCapture.ts`, system audio, 16 kHz PCM)
 into Deepgram nova-3 (`stt.ts`). Final utterances become TranscriptBuffer lines `{t, speaker?, text}`,
-and interim text only goes to the panel. Live mode spots no terms yet (that is 3b), so slots 0–5 stay empty.
-Catch-up and Save work on the live transcript.
+and interim text only goes to the panel. Catch-up and Save work on the live transcript.
+Phase 3b: live term spotting. `TermSpotter` (`app/src/pipeline/termSpotter.ts`) sends new final lines
+(at most every `LLM_SPOTTER_INTERVAL_MS`, never during silence, backs off on 429) to `LLM_SPOTTER_MODEL`
+and emits `TermCandidate { source: "live" }` into the SlotManager. When a live term is placed, `Explainer`
+(`explainer.ts`, `LLM_MODEL`) writes its card at once; a press before it is ready shows "Explaining…" and fills in.
+Spotted terms are added to Deepgram keyterms at the next Start listening. The listener profile for the prompts is
+`mock/config.json` `listenerKnows` (currently a general audience).
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -53,6 +59,10 @@ Do not build features from later phases unless asked.
 - Real model smoke run (Catch-up + Save on the mock transcript): `cd app && npm run smoke`
   (writes `output/smoke-saved-ideas.md`). Tests never call a real model (`test/fakeLlm.ts`).
   `AUTOPLAY=1 npm run dev` starts the mock meeting without pressing Play; `AUTOLISTEN=1 npm run dev` starts Live listening.
+- Term eval (voiced mock meeting through the full live pipeline: which glossary terms reach a key, false positives,
+  speech→key delay, free-tier interval floor): `cd app && npm run eval:terms` (real audio through the speakers, ~5 min)
+  or `npm run eval:terms -- --text` (no audio, script lines as finals). Flags: `--profile "<knows>"` / `--profile config`,
+  `--model <id>`, `--interval <ms>`, `--keyterms`, `--lines N`, `--tag <name>` → `output/eval-terms-<name>.json`.
 - audiotee (once per machine): `cd app && npm run build:audiotee` → `tools/audiotee/bin/audiotee`
   (pinned commit in `tools/audiotee/VERSION`, see `tools/audiotee/README.md`).
 - Live smoke run (plays the mock meeting voiced by `say` through the speakers, real audiotee + Deepgram):
@@ -83,21 +93,25 @@ Do not build features from later phases unless asked.
 - A term placed on a key never moves to another key.
 - Never commit `app/.env`, never print or log the key. LLM settings live there:
   `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_REASONING_EFFORT`, `LLM_JSON_MODE`
-  (see `app/.env.example` for Groq / Ollama / OpenRouter). Speech-to-text: `DEEPGRAM_API_KEY`
+  (see `app/.env.example` for Groq / Ollama / OpenRouter). Term spotter: `LLM_SPOTTER_MODEL` (currently
+  `openai/gpt-oss-20b`), optional `LLM_SPOTTER_REASONING_EFFORT`, `LLM_SPOTTER_JSON_MODE`, `LLM_SPOTTER_INTERVAL_MS` (default 8000). Speech-to-text: `DEEPGRAM_API_KEY`
   (never logged, sent only as a header), optional `DEEPGRAM_LANGUAGE` (`en` default, `multi` for English/French),
   `DEEPGRAM_DIARIZE`, `DEEPGRAM_ENDPOINTING_MS`, `AUDIOTEE_PATH`.
 - The human checks the physical keypad. After every plugin change: build, then say exactly
   what should be visible on which key.
-- LLM: any OpenAI-compatible chat API from `app/.env` (currently Groq `openai/gpt-oss-120b`).
+- LLM: any OpenAI-compatible chat API from `app/.env` (currently Groq `openai/gpt-oss-120b` for explanations,
+  Catch-up and Save; `openai/gpt-oss-20b` for the spotter).
   Use structured outputs (json_schema, strict) for JSON; the client falls back to JSON mode + validation.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
-- `mock/config.json`: `{ "listenerName": "...", "keyterms": [] }`; meeting lines say `{listener}` where a speaker
-  addresses them. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
+- `mock/config.json`: `{ "listenerName": "...", "listenerKnows": "...", "keyterms": [] }`; meeting lines say `{listener}`
+  where a speaker addresses them. `listenerKnows` describes the listener for the spotter and explanation prompts. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
 - Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end? }`, where `t` = meeting seconds since Start listening
   and `speaker` = "Speaker N" from Deepgram diarization.
 - `mock/glossary.json`: `{ "<term>": { "label", "full", "explanation", "example", "category" } }`
 - Term event (every source, mock or live): `TermCandidate { term, label, category, source: "mock" | "live" }`
   in `app/src/pipeline/terms.ts`.
-- Term spotter output: `{ "terms": [ { "term", "label", "category", "confidence", "reason" } ] }`
+- Term spotter output: `{ "terms": [ { "term", "heard", "label", "category", "confidence", "reason" } ] }`
+  (`term` = canonical spelling, `heard` = the words as transcribed, used to find the "In this meeting" sentence).
+- Live explanation (`Explainer`): `{ "full", "explanation", "category" }`, cached per term for the app session.

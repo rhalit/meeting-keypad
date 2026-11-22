@@ -10,7 +10,8 @@ architecture, commands and rules, and `protocol/messages.md` for the plugin ↔ 
 2. **Build audiotee** (system audio capture, once per machine): `cd app && npm run build:audiotee`.
    This writes `tools/audiotee/bin/audiotee`.
 3. **Create `app/.env`:** `cp app/.env.example app/.env`, then fill in `LLM_API_KEY` (and `LLM_BASE_URL` /
-   `LLM_MODEL` if you don't use Groq) and `DEEPGRAM_API_KEY`. Never commit this file.
+   `LLM_MODEL` if you don't use Groq) and `DEEPGRAM_API_KEY`. `LLM_SPOTTER_MODEL` (live term spotting) is a
+   small fast model on the same server (`openai/gpt-oss-20b` on Groq). Never commit this file.
 4. **Allow system audio for Electron:** System Settings → Privacy & Security → Screen & System Audio Recording →
    "System Audio Recording Only" → click + and add `app/node_modules/electron/dist/Electron.app`, then turn it on.
    macOS credits the permission to Electron, not to Terminal, so allowing only Terminal gives silence in Live mode.

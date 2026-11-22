@@ -11,21 +11,18 @@
 //    word accuracy (1 - WER) against meeting.json.
 // Needs the macOS system-audio permission for the terminal it runs in. The API key is never printed.
 
-import { execFileSync, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AudioCapture, type AudioStatus } from "../pipeline/audioCapture.js";
 import { realClock } from "../pipeline/clock.js";
 import { LiveSource, type LiveLine } from "../pipeline/liveSource.js";
-import { loadConfig, loadGlossary, loadMeeting, type MeetingLine } from "../pipeline/mockData.js";
+import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
+import { AUDIO_DIR, VOICES, voiceLines, type Clip } from "./mockAudio.js";
 import { deepgramFactory, loadSttConfig, parseKeyterms, sttAdvice, SttError, type SttStatus } from "../pipeline/stt.js";
 
 const appRoot = join(__dirname, "..", "..");
 const repoRoot = join(appRoot, "..");
-const audioDir = join(repoRoot, "tools", "mock-audio");
-const VOICES: Record<string, string> = { Lena: "Samantha", Omar: "Daniel", Priya: "Tara" };
-const FALLBACK_VOICE = "Samantha";
 const GAP_S = 0.4; // minimum silence between two spoken lines
 const TAIL_S = 6; // wait for the last finals after the last line
 
@@ -36,28 +33,6 @@ const maxLines = linesArg >= 0 ? Number(args[linesArg + 1]) : Infinity;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const now = () => performance.now();
-
-interface Clip {
-  line: MeetingLine;
-  voice: string;
-  file: string;
-  duration: number;
-}
-
-function voiceLines(lines: MeetingLine[]): Clip[] {
-  mkdirSync(audioDir, { recursive: true });
-  const clips: Clip[] = [];
-  lines.forEach((line, i) => {
-    const voice = VOICES[line.speaker] ?? FALLBACK_VOICE;
-    const hash = createHash("sha1").update(`${voice}\n${line.text}`).digest("hex").slice(0, 8);
-    const file = join(audioDir, `${String(i).padStart(2, "0")}-${line.speaker}-${hash}.aiff`);
-    if (!existsSync(file)) execFileSync("say", ["-v", voice, "-o", file, line.text]);
-    const info = execFileSync("afinfo", [file], { encoding: "utf8" });
-    const m = /estimated duration: ([\d.]+) sec/.exec(info);
-    clips.push({ line, voice, file, duration: m ? Number(m[1]) : 0 });
-  });
-  return clips;
-}
 
 /** Lowercase words, punctuation removed, hyphens split; keeps decimals like 1.8. */
 export function words(s: string): string[] {
@@ -156,7 +131,7 @@ async function main(): Promise<number> {
 
   console.log(`1) voicing ${meeting.length} lines with say (${Object.entries(VOICES).map(([s, v]) => `${s}=${v}`).join(", ")})`);
   const clips = voiceLines(meeting);
-  console.log(`   ${clips.reduce((n, c) => n + c.duration, 0).toFixed(0)} s of speech in ${audioDir}`);
+  console.log(`   ${clips.reduce((n, c) => n + c.duration, 0).toFixed(0)} s of speech in ${AUDIO_DIR}`);
 
   const log = (m: string) => console.log(`   ${m}`);
   const bin = process.env.AUDIOTEE_PATH || join(repoRoot, "tools", "audiotee", "bin", "audiotee");

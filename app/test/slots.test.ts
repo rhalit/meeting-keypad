@@ -291,3 +291,19 @@ describe("SlotManager", () => {
     expect(changes[changes.length - 1].map((k) => k.slot).sort()).toEqual([6, 7]);
   });
 });
+
+describe("SlotManager placed event", () => {
+  it("fires once per term that lands on a key, after its change, not for queued terms", () => {
+    const clock = new FakeClock();
+    const slots = new SlotManager({ clock });
+    const events: string[] = [];
+    slots.on("change", (keys: KeyState[]) => events.push(`change ${keys.map((k) => k.slot).join(",")}`));
+    slots.on("placed", ({ slot, candidate }: { slot: number; candidate: TermCandidate }) => events.push(`placed ${slot} ${candidate.term}`));
+    slots.add(cand("a"));
+    slots.add(cand("b"));
+    slots.add(cand("c")); // third within 10 s: queued
+    expect(events).toEqual(["change 0", "placed 0 a", "change 1", "placed 1 b"]);
+    clock.advance(10 * S); // includes the "new" -> "shown" changes of slots 0 and 1 after 3 s
+    expect(events.slice(4)).toEqual(["change 0", "change 1", "change 2", "placed 2 c"]);
+  });
+});

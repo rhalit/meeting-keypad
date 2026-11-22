@@ -10,9 +10,13 @@ import {
   OpenAiCompatClient,
   errorAdvice,
   loadLlmConfig,
+  loadSpotterLlmConfig,
+  spotterIntervalMs,
   warmUp,
   type LlmClient,
 } from "../pipeline/llm.js";
+import { Explainer } from "../pipeline/explainer.js";
+import { TermSpotter, type SpotInfo } from "../pipeline/termSpotter.js";
 import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
 import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
@@ -46,7 +50,9 @@ const bridge = new KeypadBridge({ initial: slots.getAll(), log: (m) => log(`[key
 const mockSource = new MockSource(meeting, glossary, clock);
 let mode: PanelMode = "mock";
 const playedLines: PanelLine[] = [];
-const overlay = new OverlayController({ clock, lookup: (term) => glossary[term] });
+// Mock terms explain from the glossary, live terms from the Explainer (set up below).
+const overlay = new OverlayController({ clock, lookup: (term) => (mode === "live" ? explainer.lookup(term) : glossary[term]) });
+const listener = { name: config.listenerName, knows: config.listenerKnows };
 
 // --- LLM (app/.env, OpenAI-compatible) ---------------------------------------------------------
 
@@ -63,6 +69,13 @@ try {
   const e = err instanceof LlmError ? err : new LlmError("config", String(err));
   llm = new MisconfiguredClient(e);
   llmStatus = { state: "error", text: "Model: not configured", advice: errorAdvice(e) };
+}
+// Term spotter: a small fast model (LLM_SPOTTER_MODEL), same server and key.
+let spotterLlm: LlmClient;
+try {
+  spotterLlm = new OpenAiCompatClient(loadSpotterLlmConfig(process.env), fetch, (m) => log(`[spotter-llm] ${m}`));
+} catch (err) {
+  spotterLlm = new MisconfiguredClient(err instanceof LlmError ? err : new LlmError("config", String(err)));
 }
 
 // --- live meeting: audiotee -> Deepgram -> LiveSource (Phase 3a) ------------------------------
@@ -89,6 +102,8 @@ const liveSource = new LiveSource({
 });
 /** The panel's "meeting topic / keyterms" text, used at the next Start listening. */
 let keytermsText = config.keyterms.join(", ");
+/** Terms the spotter found in this app session; added to Deepgram's keyterms at the next Start listening. */
+const learnedKeyterms: string[] = [];
 
 function setLlmStatus(s: PanelLlm): void {
   llmStatus = s;
@@ -132,6 +147,14 @@ const catchUp = new CatchUpController({
   onLlmOutcome,
   listenerName: config.listenerName,
 });
+const spotter = new TermSpotter({
+  clock,
+  llm: spotterLlm,
+  listener,
+  log,
+  minIntervalMs: spotterIntervalMs(process.env),
+});
+const explainer = new Explainer({ clock, llm, listener, log, onLlmOutcome });
 const saver = new SaveController({
   clock,
   llm,
@@ -159,7 +182,7 @@ function snapshot(): PanelSnapshot {
   return {
     mode,
     playback: mockSource.state(),
-    live: { ...liveSource.state(), keytermsText, configAdvice: sttConfigAdvice },
+    live: { ...liveSource.state(), keytermsText, configAdvice: sttConfigAdvice, spotter: spotter.status(), learnedKeyterms },
     llm: llmStatus,
     pluginsConnected: bridge.connectedCount(),
     keys: slots.getAll().map((k, i) => ({ ...k, term: slots.termAt(i) ?? undefined })),
@@ -177,7 +200,12 @@ slots.on("change", (keys: KeyState[]) => {
   pushSnapshot();
 });
 
-/** A spoken line from either source (mock: with terms; live: finals, no terms yet). */
+// A live term just landed on a key: write its explanation now, so it is ready before the press.
+slots.on("placed", ({ candidate }: { slot: number; candidate: TermCandidate }) => {
+  if (candidate.source === "live") explainer.prefetch(candidate.term);
+});
+
+/** A spoken line from either source (mock: with terms; live: finals, terms come from the spotter). */
 function onLine(line: LiveLine): void {
   transcript.add(line);
   const pl: PanelLine = { t: line.t, speaker: line.speaker, text: line.text, terms: line.terms };
@@ -191,6 +219,8 @@ function resetMeeting(why: string): void {
   log(`reset (${why})`);
   catchUp.cancel();
   saver.reset();
+  spotter.reset();
+  explainer.reset();
   overlay.hide("restart");
   slots.reset();
   transcript.clear();
@@ -208,7 +238,19 @@ mockSource.on("restart", () => resetMeeting("restart"));
 mockSource.on("state", pushSnapshot);
 mockSource.on("end", () => log("meeting finished"));
 
-liveSource.on("line", onLine);
+liveSource.on("line", (line: LiveLine) => {
+  onLine(line);
+  if (mode === "live") spotter.addLine(line);
+});
+spotter.on("term", (c: TermCandidate, info: SpotInfo) => {
+  log(`term "${c.term}" (${c.category}, ${c.source}) label ${JSON.stringify(c.label)}`);
+  explainer.noteHeard(c, info.line, info.context);
+  if (!learnedKeyterms.some((k) => k.toLowerCase() === c.term.toLowerCase())) learnedKeyterms.push(c.term);
+  slots.add(c);
+});
+spotter.on("status", pushSnapshot);
+explainer.on("ready", (term: string) => overlay.refresh(term));
+explainer.on("failed", (term: string) => overlay.refresh(term));
 liveSource.on("restart", () => resetMeeting("start listening"));
 liveSource.on("interim", (i: LiveInterim | null) => send("interim", i));
 liveSource.on("level", (db: number) => send("level", Number.isFinite(db) ? db : -100));
@@ -232,7 +274,8 @@ function startListening(text: string): void {
     pushSnapshot();
     return;
   }
-  const keyterms = parseKeyterms(text);
+  // The panel's text first, so it wins when the 50-keyterm cap is reached.
+  const keyterms = parseKeyterms([text, ...learnedKeyterms]);
   log(`listening${keyterms.length ? ` (keyterms: ${keyterms.join(", ")})` : ""}`);
   liveSource.start(keyterms);
 }
@@ -242,11 +285,13 @@ bridge.on("press", ({ slot }: PressEvent) => {
   const r = slots.press(slot);
   switch (r.kind) {
     case "term": {
+      // A live term whose explanation failed (or never started) is asked for again; the card waits.
+      if (mode === "live" && explainer.state(r.term) !== "pending" && explainer.state(r.term) !== "ready") explainer.prefetch(r.term);
       const outcome = overlay.press(r);
       const card = overlay.current();
       if (card && (outcome === "shown" || outcome === "switched")) pressReceivedAt.set(card.id, { what: `"${r.term}"`, at: received });
-      if (outcome === "ignored") log(`WARNING: PRESS slot ${slot}: "${r.term}" has no glossary entry, no card`);
-      else log(`PRESS slot ${slot}: "${r.term}" -> card ${outcome}`);
+      if (outcome === "ignored") log(`WARNING: PRESS slot ${slot}: "${r.term}" has no explanation entry, no card`);
+      else log(`PRESS slot ${slot}: "${r.term}" -> card ${outcome}${mode === "live" ? ` (explanation ${explainer.state(r.term)})` : ""}`);
       break;
     }
     case "action": {
@@ -368,6 +413,11 @@ app.whenReady().then(async () => {
   overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, log: (m) => log(`[overlay] ${m}`) });
   createPanel();
   void runWarmUp();
+  if (!(spotterLlm instanceof MisconfiguredClient)) {
+    void warmUp(spotterLlm, clock).then((r) =>
+      log(r.ok ? `[spotter-llm] warm-up ok: ${spotterLlm.describe()} in ${r.ms} ms` : `[spotter-llm] WARNING: warm-up failed: ${r.error.kind}: ${r.error.message}`),
+    );
+  }
   log(`ready: ${meeting.length} lines, ${Object.keys(glossary).length} glossary terms, listener "${config.listenerName}". Press Play in the panel.`);
   if (process.env.AUTOPLAY === "1") mockSource.play(); // AUTOPLAY=1 npm run dev: start the meeting right away
   if (process.env.AUTOLISTEN === "1") {
@@ -383,6 +433,7 @@ app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
   catchUp.cancel();
   saver.reset();
+  spotter.dispose();
   mockSource.dispose();
   audio.killNow(); // never leave audiotee running after the app quits
   void liveSource.dispose();

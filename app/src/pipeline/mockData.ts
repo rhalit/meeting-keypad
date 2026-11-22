@@ -23,8 +23,21 @@ export type Glossary = Record<string, GlossaryEntry>;
 export interface MockConfig {
   /** The person using the keypad; speakers address them by this name. */
   listenerName: string;
+  /** What the listener already knows (used in the term spotter and explanation prompts). Optional. */
+  listenerKnows: string;
   /** "Meeting topic / keyterms" for live speech-to-text (Deepgram keyterms). Optional. */
   keyterms: string[];
+}
+
+/** Who the prompts write for, e.g. "Rhali (2nd-year EPFL master student ...)". */
+export interface ListenerProfile {
+  name: string;
+  knows: string;
+}
+
+/** "Rhali (knows: ...)" or just "Rhali". */
+export function describeListener(p: ListenerProfile): string {
+  return p.knows ? `${p.name} (${p.knows})` : p.name;
 }
 
 export const LISTENER_PLACEHOLDER = "{listener}";
@@ -40,7 +53,8 @@ export function loadConfig(path: string): MockConfig {
   }
   const k = (raw as { keyterms?: unknown }).keyterms;
   const keyterms = Array.isArray(k) ? k.map(String) : typeof k === "string" ? [k] : [];
-  return { listenerName: raw.listenerName.trim(), keyterms };
+  const knows = (raw as { listenerKnows?: unknown }).listenerKnows;
+  return { listenerName: raw.listenerName.trim(), listenerKnows: typeof knows === "string" ? knows.trim() : "", keyterms };
 }
 
 /** Reads meeting.json and fills in the listener's name. */

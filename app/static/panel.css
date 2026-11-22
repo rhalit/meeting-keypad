@@ -126,3 +126,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 #stt-text.ok::before { color: var(--ok); }
 #stt-text.wait::before { color: #d29922; }
 #stt-text.err { color: #f85149; }
+.learned { color: var(--muted); font-size: 12px; }
+.learned[hidden] { display: none; }
+#spotter-text.ok::before, #spotter-text.err::before, #spotter-text.warn::before { content: "●"; margin-right: 6px; }
+#spotter-text.ok::before { color: var(--ok); }
+#spotter-text.warn { color: #d29922; }
+#spotter-text.err { color: #f85149; }

@@ -19,8 +19,10 @@ export interface TermCard {
   color: string;
   explanation: string;
   example: string;
-  /** How long the card stays up (drives the countdown bar). */
-  durationMs: number;
+  /** True while the explanation is still being written (live terms): the card says "Explaining…". */
+  pending: boolean;
+  /** How long the card stays up (drives the countdown bar); null while pending (no countdown). */
+  durationMs: number | null;
 }
 
 export type TextTone = "info" | "success" | "error";
@@ -56,10 +58,13 @@ export interface TextCardOptions {
 export type HideReason = "toggle" | "timeout" | "restart";
 export type OverlayPressOutcome = "shown" | "switched" | "hidden" | "ignored";
 
+/** What a lookup returns: a glossary entry, or a live explanation that may still be pending. */
+export type CardEntry = GlossaryEntry & { pending?: boolean };
+
 export interface OverlayControllerOptions {
   clock: Clock;
   /** Explanation for a term, or undefined if there is none. */
-  lookup: (term: string) => GlossaryEntry | undefined;
+  lookup: (term: string) => CardEntry | undefined;
   /** Card hides itself after this long. */
   visibleMs?: number;
 }
@@ -72,12 +77,14 @@ export interface OverlayControllerOptions {
  * - The card hides itself `visibleMs` (15 s) after the last show.
  * - press() ignores bottom-row, empty and invalid slots (the visible card stays); the Catch-up and
  *   Save controllers show text cards with showText() / updateText() / finishText().
- * - Events: `show` (OverlayCard), `update` (TextCard, same id with new body/duration),
+ * - A live term whose explanation is still pending shows at once with "Explaining…" and no countdown;
+ *   refresh(term) fills it in and starts the 15 s.
+ * - Events: `show` (OverlayCard), `update` (same id: TextCard with new body/duration, or a filled-in TermCard),
  *   `hide` ({ reason: HideReason }).
  */
 export class OverlayController extends EventEmitter {
   private readonly clock: Clock;
-  private readonly lookup: (term: string) => GlossaryEntry | undefined;
+  private readonly lookup: (term: string) => CardEntry | undefined;
   private readonly visibleMs: number;
   private card: OverlayCard | null = null;
   private timer: TimerHandle | null = null;
@@ -101,6 +108,23 @@ export class OverlayController extends EventEmitter {
     const switched = this.card !== null;
     this.show(r.term, entry);
     return switched ? "switched" : "shown";
+  }
+
+  /**
+   * The explanation for `term` changed (a live explanation arrived). If that term's card is visible,
+   * it is filled in (same id, `update` event) and the 15 s timer starts. True if a card was updated.
+   */
+  refresh(term: string): boolean {
+    const c = this.card;
+    if (c?.kind !== "term" || normalizeTerm(c.term) !== normalizeTerm(term)) return false;
+    const e = this.lookup(c.term);
+    if (!e) return false;
+    const pending = e.pending === true;
+    this.card = { ...this.termCard(c.term, e), id: c.id };
+    if (pending) this.cancelTimer();
+    else this.startTimer(this.visibleMs);
+    this.emit("update", this.card);
+    return true;
   }
 
   /** Show a text card (replaces whatever is visible). Returns its id. */
@@ -164,9 +188,17 @@ export class OverlayController extends EventEmitter {
     this.removeAllListeners();
   }
 
-  private show(term: string, e: GlossaryEntry): void {
+  private show(term: string, e: CardEntry): void {
     this.cancelTimer();
-    this.card = {
+    this.card = this.termCard(term, e);
+    if (this.card.durationMs !== null) this.startTimer(this.card.durationMs);
+    this.emit("show", this.card);
+  }
+
+  /** A pending card has no countdown; it starts when refresh() fills it in. */
+  private termCard(term: string, e: CardEntry): TermCard {
+    const pending = e.pending === true;
+    return {
       kind: "term",
       id: this.nextId++,
       term,
@@ -175,10 +207,9 @@ export class OverlayController extends EventEmitter {
       color: CATEGORY_COLORS[e.category],
       explanation: e.explanation,
       example: e.example,
-      durationMs: this.visibleMs,
+      pending,
+      durationMs: pending ? null : this.visibleMs,
     };
-    this.startTimer(this.visibleMs);
-    this.emit("show", this.card);
   }
 
   private startTimer(ms: number): void {

@@ -57,7 +57,8 @@ interface Placed {
  *   the one placed earliest), otherwise the longest-shown unopened term once that has had >= 20 s.
  * - A term never moves to another slot. Duplicates (case, plurals) are merged.
  * - Terms that were opened never come back. At most 2 placements per 10 s; extras queue (FIFO).
- * - Emits `change` with only the slots that changed, as complete protocol KeyStates.
+ * - Emits `change` with only the slots that changed, as complete protocol KeyStates, and
+ *   `placed` ({ slot, candidate }) for every term that lands on a key (after its `change`).
  */
 export class SlotManager extends EventEmitter implements ActionKeys {
   private readonly clock: Clock;
@@ -165,6 +166,7 @@ export class SlotManager extends EventEmitter implements ActionKeys {
   private pump(): void {
     this.cancelPumpTimer();
     const changed: number[] = [];
+    const placed: { slot: number; candidate: TermCandidate }[] = [];
     while (this.queue.length > 0) {
       const now = this.clock.now();
       this.placements = this.placements.filter((t) => t > now - this.windowMs);
@@ -174,8 +176,10 @@ export class SlotManager extends EventEmitter implements ActionKeys {
       const { key, candidate } = this.queue.shift()!;
       this.place(slot, key, candidate, now);
       changed.push(slot);
+      placed.push({ slot, candidate });
     }
     if (changed.length) this.emitChange(changed);
+    for (const p of placed) this.emit("placed", p);
     if (this.queue.length > 0) this.scheduleRetry();
   }
 
