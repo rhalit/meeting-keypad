@@ -54,6 +54,8 @@ export interface PanelFocus {
   /** Set while Catch-up shows "Missed …": the missed span, e.g. "2 min 10 s". */
   missed?: string;
   mentionFlashing: boolean;
+  /** The Logitech MX Brio as macOS sees it (plugged in or not), checked every 10 s. */
+  brio: { connected: boolean; name?: string; checked: boolean };
 }
 
 export interface PanelSnapshot {
@@ -86,6 +88,8 @@ export interface PanelLine {
   speaker?: string;
   text: string;
   terms: string[];
+  /** Mock: meeting second at which each word starts (the panel reveals the line word by word). */
+  words?: number[];
 }
 
 /** Live, not yet final; `null` clears it. */
@@ -123,5 +127,7 @@ export type PanelCommand =
   | "sim-mention"
   /** Ask the Gaze Tracker for its 9-point calibration. */
   | "gaze-calibrate"
+  /** Open the Logi Gaze Tracker app (to pick the MX Brio in its Setup tab). */
+  | "open-gaze-tracker"
   /** Write output/meetings/<date>.md and show it in Finder */
   | "export";

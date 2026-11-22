@@ -129,7 +129,10 @@ export interface SaveOptions {
   meetingTime: () => number;
   keys: ActionKeys;
   overlay: OverlayController;
-  file: SavedIdeasFile;
+  /** Optional Markdown file (the smoke script); the app keeps saved ideas in its Saved view instead (onSaved). */
+  file?: SavedIdeasFile;
+  /** Every newly saved idea (not duplicates), e.g. for the app's per-meeting Saved view. */
+  onSaved?: (idea: SavedIdea) => void;
   log: (msg: string) => void;
   onLlmOutcome?: (o: LlmOutcome) => void;
   /** Wall clock for the "saved" stamp. */
@@ -157,11 +160,11 @@ export type SaveResult = "saved" | "duplicate" | "failed" | "cancelled";
  * at most one model call per 3 s: a press in that cooldown is ignored (logged).
  */
 export class SaveController {
-  private readonly o: Required<Omit<SaveOptions, "onLlmOutcome">> & Pick<SaveOptions, "onLlmOutcome">;
+  private readonly o: Required<Omit<SaveOptions, "onLlmOutcome" | "file" | "onSaved">> & Pick<SaveOptions, "onLlmOutcome" | "file" | "onSaved">;
   private busy: AbortController | null = null;
   private flashTimer: TimerHandle | null = null;
   private saved: SavedIdea[] = [];
-  private last: { idea: SavedIdea; upTo: number } | null = null;
+  private last: { idea: SavedIdea; upTo: number; windowS: number } | null = null;
   /** Clock ms of the last model call. */
   private lastCallAt: number | null = null;
   private readonly inFlight = new Set<Promise<SaveResult>>();
@@ -181,19 +184,21 @@ export class SaveController {
     };
   }
 
-  press(): SavePress {
+  /** `windowS`: how far back to look for the idea (the key menu's choice); default 45 s. */
+  press(opts: { windowS?: number } = {}): SavePress {
     const { log, overlay } = this.o;
+    const windowS = opts.windowS ?? this.o.windowS;
     if (this.busy) {
       log("save: already saving, press ignored");
       return "ignored";
     }
-    const lines = this.o.transcript.getLast(this.o.windowS, this.o.meetingTime());
+    const lines = this.o.transcript.getLast(windowS, this.o.meetingTime());
     if (lines.length === 0) {
       overlay.showText({ eyebrow: "Save", title: "Nothing to save yet.", durationMs: this.o.titleCardMs });
       return "empty";
     }
     const upTo = lines[lines.length - 1].t;
-    if (this.last && upTo <= this.last.upTo) {
+    if (this.last && upTo <= this.last.upTo && this.last.windowS === windowS) {
       log(`save: nothing new since "${this.last.idea.title}", not saved again`);
       this.confirm(this.last.idea, true);
       return "duplicate";
@@ -203,7 +208,7 @@ export class SaveController {
       log(`save: press during the ${this.o.cooldownMs / 1000} s cooldown (${since} ms after the last save), ignored`);
       return "cooldown";
     }
-    const p = this.run(lines);
+    const p = this.run(lines, windowS);
     this.inFlight.add(p);
     void p.finally(() => this.inFlight.delete(p));
     return "started";
@@ -218,6 +223,11 @@ export class SaveController {
     return this.saved.map((i) => ({ ...i }));
   }
 
+  /** Busy saving: a press would be ignored (no key menu then). */
+  busyNow(): boolean {
+    return this.busy !== null;
+  }
+
   /** New meeting: stop a running save, restore the key, forget what was saved. */
   reset(): void {
     this.busy?.abort(new LlmError("cancelled", "Cancelled"));
@@ -230,7 +240,7 @@ export class SaveController {
     this.lastCallAt = null;
   }
 
-  private async run(lines: TranscriptLine[]): Promise<SaveResult> {
+  private async run(lines: TranscriptLine[], windowS: number): Promise<SaveResult> {
     const { clock, llm, keys, log, overlay } = this.o;
     const ac = new AbortController();
     this.busy = ac;
@@ -256,13 +266,13 @@ export class SaveController {
       const idea = normalizeIdea(raw, lines);
       const dup = findDuplicate(idea, this.saved);
       if (dup) {
-        this.last = { idea: dup, upTo };
+        this.last = { idea: dup, upTo, windowS };
         log(`save: "${idea.title}" repeats "${dup.title}", not saved again`);
         this.confirm(dup, true);
         return (result = "duplicate");
       }
       try {
-        await this.o.file.append(formatEntry(idea, this.o.now()));
+        if (this.o.file) await this.o.file.append(formatEntry(idea, this.o.now()));
       } catch (err) {
         log(`save: could not write saved ideas: ${(err as Error).message}`);
         overlay.showText({
@@ -276,7 +286,8 @@ export class SaveController {
       }
       if (this.busy !== ac) return (result = "cancelled");
       this.saved.push(idea);
-      this.last = { idea, upTo };
+      this.o.onSaved?.({ ...idea });
+      this.last = { idea, upTo, windowS };
       log(`save: "${idea.title}" (meeting ${mmss(idea.t)}) saved in ${clock.now() - started} ms`);
       this.confirm(idea, false);
       return (result = "saved");

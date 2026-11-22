@@ -55,7 +55,8 @@ export interface TextCardOptions {
   durationMs: number | null;
 }
 
-export type HideReason = "toggle" | "timeout" | "restart";
+/** "dismiss": the card's × was clicked. */
+export type HideReason = "toggle" | "timeout" | "restart" | "dismiss";
 export type OverlayPressOutcome = "shown" | "switched" | "hidden" | "ignored";
 
 /** What a lookup returns: a glossary entry, or a live explanation that may still be pending. */

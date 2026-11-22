@@ -29,6 +29,9 @@ namespace Loupedeck.MeetingKeysPlugin
 
         private const Int32 BorderWidth = 2;
 
+        private const String BackParameter = "back";
+        private const String ForwardParameter = "forward";
+
         // Layout, as shares of the key height.
         private const Double Pad = 0.06;
         private const Double CategoryBand = 0.22;
@@ -47,6 +50,10 @@ namespace Loupedeck.MeetingKeysPlugin
             {
                 this.AddParameter(i.ToString(), $"Slot {i} ({Positions[i]})", "Meeting Keys");
             }
+
+            // For the keypad's two arrow buttons (or any control): leave a key menu / reserved.
+            this.AddParameter(BackParameter, "Back (left arrow)", "Meeting Keys");
+            this.AddParameter(ForwardParameter, "Forward (right arrow)", "Meeting Keys");
 
             // A widget's image fills the whole key: the device does not print the action name under it.
             this.IsWidget = true;
@@ -72,6 +79,14 @@ namespace Loupedeck.MeetingKeysPlugin
 
         protected override void RunCommand(String actionParameter)
         {
+            if (actionParameter == BackParameter || actionParameter == ForwardParameter)
+            {
+                var dir = actionParameter == BackParameter ? "left" : "right";
+                PluginLog.Info($"Nav pressed: {dir}");
+                this.MeetingPlugin.Connection?.TrySendNav(dir);
+                return;
+            }
+
             if (!TryParseSlot(actionParameter, out var slot))
             {
                 PluginLog.Warning($"RunCommand with invalid parameter '{actionParameter}'");
@@ -84,6 +99,16 @@ namespace Loupedeck.MeetingKeysPlugin
 
         protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
         {
+            if (actionParameter == BackParameter)
+            {
+                return "Back";
+            }
+
+            if (actionParameter == ForwardParameter)
+            {
+                return "Forward";
+            }
+
             if (!TryParseSlot(actionParameter, out var slot))
             {
                 return "Meeting key";
@@ -99,6 +124,13 @@ namespace Loupedeck.MeetingKeysPlugin
         {
             using var b = new BitmapBuilder(imageSize);
             b.Clear(Background);
+
+            // Back / Forward on an LCD key (on the arrow buttons the image is not shown).
+            if (actionParameter == BackParameter || actionParameter == ForwardParameter)
+            {
+                this.DrawLabel(b, actionParameter == BackParameter ? "‹ Back" : "Forward ›", DefaultAccent, top: 0, ActionMaxSize, out _);
+                return b.ToImage();
+            }
 
             if (!TryParseSlot(actionParameter, out var slot))
             {
@@ -139,11 +171,27 @@ namespace Loupedeck.MeetingKeysPlugin
             var textColor = hasCategory ? main : (ParseHex(s.Color) ?? main);
             var categoryColor = accent;
 
+            // On a user background the category colour can clash: soft white on dark keys, soft dark on light ones.
+            if (bg.HasValue)
+            {
+                categoryColor = Mix(bg.Value, light ? DarkText : BitmapColor.White, light ? 0.55 : 0.72);
+            }
+
             switch (s.State)
             {
                 case "seen":
-                    textColor = light ? SeenTextOnLight : SeenText;
-                    categoryColor = Dim(accent, 0.5);
+                    if (bg.HasValue)
+                    {
+                        // Faded towards the key colour, so "opened" stays readable on any background.
+                        textColor = Mix(bg.Value, main, 0.45);
+                        categoryColor = Mix(bg.Value, main, 0.35);
+                    }
+                    else
+                    {
+                        textColor = SeenText;
+                        categoryColor = Dim(accent, 0.5);
+                    }
+
                     break;
                 case "busy":
                     label += TextFit.Ellipsis;
@@ -237,6 +285,10 @@ namespace Loupedeck.MeetingKeysPlugin
 
             return (0.2126 * Lin(c.R)) + (0.7152 * Lin(c.G)) + (0.0722 * Lin(c.B));
         }
+
+        // `a` moved `t` of the way towards `b` (0 = a, 1 = b).
+        private static BitmapColor Mix(BitmapColor a, BitmapColor b, Double t) =>
+            new((Int32)(a.R + ((b.R - a.R) * t)), (Int32)(a.G + ((b.G - a.G) * t)), (Int32)(a.B + ((b.B - a.B) * t)));
 
         private static BitmapColor Dim(BitmapColor c, Double factor) =>
             new((Int32)(c.R * factor), (Int32)(c.G * factor), (Int32)(c.B * factor));

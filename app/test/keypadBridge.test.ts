@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { KeypadBridge, PortInUseError, type PressEvent } from "../src/pipeline/keypadBridge.js";
+import { KeypadBridge, PortInUseError, type NavEvent, type PressEvent } from "../src/pipeline/keypadBridge.js";
 import { SlotManager } from "../src/pipeline/slots.js";
 import { realClock } from "../src/pipeline/clock.js";
 
@@ -98,6 +98,23 @@ describe("KeypadBridge", () => {
     c.ws.send("not json");
     await tick();
     expect(presses).toEqual([{ slot: 3, ts: 123 }]);
+  });
+
+  it("emits nav events (Back / Forward actions) and ignores invalid ones", async () => {
+    const { bridge, port } = await startBridge();
+    const navs: NavEvent[] = [];
+    bridge.on("nav", (n: NavEvent) => navs.push(n));
+    const c = await client(port);
+    c.ws.send(JSON.stringify({ type: "hello" }));
+    await c.next();
+    c.ws.send(JSON.stringify({ type: "nav", dir: "left", ts: 5 }));
+    c.ws.send(JSON.stringify({ type: "nav", dir: "up", ts: 6 }));
+    c.ws.send(JSON.stringify({ type: "nav", dir: "right", ts: 7 }));
+    await tick();
+    expect(navs).toEqual([
+      { dir: "left", ts: 5 },
+      { dir: "right", ts: 7 },
+    ]);
   });
 
   it("emits connected and disconnected", async () => {

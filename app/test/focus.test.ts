@@ -124,4 +124,24 @@ describe("FocusTracker", () => {
     focus.setSimulatedAway(false);
     expect(backs[0]).toMatchObject({ from: 0, to: 40 });
   });
+
+  it("comes back on two good frames in a row, even when most frames have no face", () => {
+    feed(LOOKING, 1000);
+    feed(NO_FACE, 4000);
+    expect(focus.status().state).toBe("away");
+    // Detection drops 3 of 4 frames, then catches the face twice in a row.
+    feed(NO_FACE, 600);
+    focus.sample(LOOKING);
+    clock.advance(200);
+    focus.sample(LOOKING);
+    expect(focus.status().state).toBe("focused");
+    expect(backs).toHaveLength(1);
+  });
+
+  it("a single good frame between misses does not bring you back", () => {
+    feed(LOOKING, 1000);
+    feed(NO_FACE, 4000);
+    for (let i = 0; i < 20; i++) feed(i % 2 === 0 ? LOOKING : NO_FACE, 200);
+    expect(focus.status().state).toBe("away");
+  });
 });

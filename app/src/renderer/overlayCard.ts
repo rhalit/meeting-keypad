@@ -34,6 +34,8 @@ interface OverlayApi {
   onTheme(cb: (theme: string) => void): void;
   sized(id: number, height: number): void;
   shown(id: number): void;
+  interactive(on: boolean): void;
+  close(): void;
 }
 interface Window {
   overlay: OverlayApi;
@@ -172,6 +174,15 @@ interface Window {
   });
 
   window.overlay.onHide(() => document.body.classList.remove("visible"));
+
+  // × : the window is click-through, so it asks for clicks only while the pointer is on the button.
+  const closeBtn = el<HTMLButtonElement>("close");
+  closeBtn.addEventListener("mouseenter", () => window.overlay.interactive(true));
+  closeBtn.addEventListener("mouseleave", () => window.overlay.interactive(false));
+  closeBtn.addEventListener("click", () => {
+    window.overlay.interactive(false);
+    window.overlay.close();
+  });
   window.overlay.onTheme((theme) => {
     document.documentElement.dataset.theme = theme;
   });

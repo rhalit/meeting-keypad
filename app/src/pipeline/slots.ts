@@ -96,6 +96,8 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
   private flash: boolean | null = null;
   private actionKeys: ActionKeyMap = ACTION_KEYS;
   private backgrounds: KeyBackgrounds = {};
+  /** A key menu (Catch-up / Save durations) shown over everything; terms keep updating underneath. */
+  private menu: Map<number, KeyState> | null = null;
   /** Layout just before the last shift, and when it happened. */
   private beforeShift: (Placed | null)[] | null = null;
   private shiftAt = -Infinity;
@@ -141,6 +143,17 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
     if (override) this.overrides.set(slot, { ...override });
     else if (!this.overrides.delete(slot)) return;
     this.emit("change", [this.keyState(slot)]);
+  }
+
+  /** Show a key menu (slot -> look; missing slots are empty), or null for the normal keys. Sends all 9. */
+  setMenu(keys: KeyState[] | null): void {
+    if (keys === null && this.menu === null) return;
+    this.menu = keys ? new Map(keys.map((k) => [k.slot, k])) : null;
+    this.emit("change", this.getAll());
+  }
+
+  menuOpen(): boolean {
+    return this.menu !== null;
   }
 
   /** User key backgrounds (panel Settings): `terms` for keys 0-5, "6" / "7" / "8" for the bottom row. Sends all 9. */
@@ -267,11 +280,21 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
     // In `alert`, color is the background (protocol v2), so a term key's category colour must not leak in.
     if (this.flash === true) return { ...base, color: FLASH_RED, state: "alert" };
     if (base.state === "empty" || base.state === "alert") return base;
+    return this.withBackground(slot, base);
+  }
+
+  /** Normal key, or the open menu's key for that slot. */
+  private baseKeyState(slot: number): KeyState {
+    if (this.menu) return this.menu.get(slot) ?? emptyKey(slot);
+    return this.plainKeyState(slot);
+  }
+
+  private withBackground(slot: number, base: KeyState): KeyState {
     const bg = slot < TERM_SLOTS ? this.backgrounds.terms : this.backgrounds[String(slot) as "6" | "7" | "8"];
     return bg && bg !== "#000000" ? { ...base, bg } : base;
   }
 
-  private baseKeyState(slot: number): KeyState {
+  private plainKeyState(slot: number): KeyState {
     if (slot >= TERM_SLOTS) return { ...actionKeyIn(this.actionKeys, slot), ...this.overrides.get(slot) };
     const p = this.slots[slot];
     if (!p) return emptyKey(slot);

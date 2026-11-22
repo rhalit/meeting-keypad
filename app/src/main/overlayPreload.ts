@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld("overlay", {
   onTheme: (cb: (theme: string) => void) => ipcRenderer.on("overlay:theme", (_e, theme) => cb(theme)),
   sized: (id: number, height: number) => ipcRenderer.send("overlay:size", { id, height }),
   shown: (id: number) => ipcRenderer.send("overlay:shown", id),
+  /** Pointer over the × or not: the window takes clicks only then. */
+  interactive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
+  close: () => ipcRenderer.send("overlay:close"),
 });

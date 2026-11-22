@@ -84,7 +84,7 @@ describe("mock/meeting.json", () => {
 
   it("only the two listener lines (2:32, 4:30) name the listener, so For-me makes exactly 2 model calls", () => {
     const { listenerName, listenerAliases } = loadConfig(join(MOCK, "config.json"));
-    expect(listenerAliases).toContain("Rally");
+    expect(listenerAliases).toContain("Alec");
     const lines = loadMeeting(join(MOCK, "meeting.json"), listenerName);
     const named = lines.filter((l) => mentionsListener(l.text, { name: listenerName, aliases: listenerAliases }));
     expect(named.map((l) => l.t)).toEqual([152, 270]);

@@ -44,4 +44,13 @@ describe("osaDistance", () => {
     expect(osaDistance("rally", "really")).toBe(1);
     expect(osaDistance("", "abc")).toBe(3);
   });
+
+  it("a short name (Alex) matches exactly or by alias, never by one edit (flex, apex, Alexa)", () => {
+    const alex = { name: "Alex", aliases: ["Alec", "Alix"] };
+    expect(mentionsListener("Alex, can you take the eval set?", alex)).toBe("alex");
+    expect(mentionsListener("Is that Alex's draft?", alex)).toBe("alex");
+    expect(mentionsListener("Alec, could you send the scope?", alex)).toBe("alec");
+    expect(mentionsListener("We keep a flex budget for the apex project.", alex)).toBeNull();
+    expect(mentionsListener("Alexa, turn the lights off.", alex)).toBeNull();
+  });
 });

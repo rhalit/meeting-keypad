@@ -18,10 +18,14 @@ export function formatTranscript(lines: TranscriptLine[], opts: { seconds?: bool
   return lines.map((l) => `[${opts.seconds ? `t=${l.t}` : mmss(l.t)}] ${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
 }
 
-export function catchUpMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean } = {}): ChatMessage[] {
-  const span = opts.away
-    ? "the transcript from the moment they looked away until now"
-    : "the last two minutes of the transcript";
+/** "the last two minutes", "the last 30 seconds": how far back a summary looks, in words. */
+export function windowWords(sec = 120): string {
+  const words: Record<number, string> = { 30: "30 seconds", 60: "minute", 120: "two minutes", 300: "five minutes", 600: "ten minutes" };
+  return `the last ${words[sec] ?? (sec < 60 ? `${sec} seconds` : `${Math.round(sec / 60)} minutes`)}`;
+}
+
+export function catchUpMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean; windowS?: number } = {}): ChatMessage[] {
+  const span = opts.away ? "the transcript from the moment they looked away until now" : `${windowWords(opts.windowS)} of the transcript`;
   const you = listenerName
     ? ` The reader is ${listenerName}; if someone asked ${listenerName} to do something, put it in the Decided line.`
     : "";
@@ -254,10 +258,8 @@ export function summaryMessages(lines: TranscriptLine[], listenerName?: string):
 // --- Education mode: Explain simply (slot 8), Flashcard (slot 6), Quiz me (slot 7) --------------
 
 /** Streams 3 bullet lines, same shape as Catch-up so the same controller and card can show it. */
-export function explainSimplyMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean } = {}): ChatMessage[] {
-  const span = opts.away
-    ? "the part of the lecture from the moment they looked away until now"
-    : "the last two minutes of the lecture";
+export function explainSimplyMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean; windowS?: number } = {}): ChatMessage[] {
+  const span = opts.away ? "the part of the lecture from the moment they looked away until now" : `${windowWords(opts.windowS)} of the lecture`;
   return [
     {
       role: "system",

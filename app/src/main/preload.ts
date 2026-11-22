@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-const CHANNELS = ["snapshot", "line", "reset", "interim", "level"];
+const CHANNELS = ["snapshot", "line", "reset", "interim", "level", "saved"];
 
 // Sandboxed preload: the panel only gets these three functions.
 contextBridge.exposeInMainWorld("keypad", {

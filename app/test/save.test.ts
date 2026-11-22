@@ -112,6 +112,36 @@ describe("SaveController", () => {
     ]);
   });
 
+  it("press({ windowS }) looks back that far (key menu); the same window with nothing new is not asked again", async () => {
+    expect(save.press({ windowS: 20 })).toBe("started");
+    const user = llm.last().req.messages.find((m) => m.role === "user")!.content;
+    expect(user).toContain("[t=108]");
+    expect(user).not.toContain("[t=99]");
+    llm.last().end(canary);
+    await save.whenIdle();
+    clock.advance(3000);
+    expect(save.press({ windowS: 20 })).toBe("duplicate");
+    expect(llm.calls).toHaveLength(1);
+    expect(save.press({ windowS: 300 })).toBe("started"); // a wider window may hold another idea
+    expect(llm.calls).toHaveLength(2);
+  });
+
+  it("without a file, hands each new idea to onSaved (the app's Saved view), not repeats", async () => {
+    const got: string[] = [];
+    const s2 = new SaveController({ clock, llm, transcript, meetingTime: () => now, keys: slots, overlay, log: () => {}, onSaved: (i) => got.push(i.title) });
+    s2.press();
+    llm.last().end(canary);
+    await s2.whenIdle();
+    expect(got).toEqual(["Canary rollout to 5 % first"]);
+    expect(written).toEqual([]);
+    addUpTo(139);
+    clock.advance(3000);
+    s2.press();
+    llm.last().end(canary); // same idea again
+    await s2.whenIdle();
+    expect(got).toHaveLength(1);
+  });
+
   it('shows "Saved ✓" in green for 1.5 s and the title card for 3 s', async () => {
     save.press();
     llm.last().end(canary);

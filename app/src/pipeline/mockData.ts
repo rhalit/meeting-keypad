@@ -8,6 +8,8 @@ export interface MeetingLine {
   speaker: string;
   text: string;
   terms: string[];
+  /** Optional (JSON `words`): meeting second at which each word of `text` starts (recorded scenarios, speech-to-text). */
+  wordStarts?: number[];
 }
 
 export interface GlossaryEntry {
@@ -73,12 +75,16 @@ export function loadMeeting(path: string, listenerName: string): MeetingLine[] {
     if (typeof l?.t !== "number" || typeof l.speaker !== "string" || typeof l.text !== "string" || !Array.isArray(l.terms)) {
       throw new Error(`${path}: line ${i} does not match {t, speaker, text, terms}`);
     }
-    return {
+    const line: MeetingLine = {
       t: l.t,
       speaker: l.speaker,
       text: l.text.split(LISTENER_PLACEHOLDER).join(listenerName),
       terms: l.terms.map(String),
     };
+    // Word times only when they still fit the text (a multi-word listener name changes the count).
+    const n = line.text.split(/\s+/).filter(Boolean).length;
+    if (Array.isArray(l.words) && l.words.length === n && l.words.every((w: unknown) => typeof w === "number")) line.wordStarts = l.words;
+    return line;
   });
 }
 
@@ -105,6 +111,10 @@ export interface ScenarioInfo {
   title: string;
   usage: "meeting" | "education";
   path: string;
+  /** A recorded call to play in sync (file in the scenario folder, e.g. "video.mp4"). */
+  video?: string;
+  /** Length in seconds when it runs past the last line (the video's length). */
+  duration?: number;
 }
 
 /** Reads and checks mock/scenarios/index.json (ids unique, usage meeting / education). */
@@ -122,7 +132,12 @@ export function loadScenarioIndex(path: string): ScenarioInfo[] {
       (o.usage === "meeting" || o.usage === "education");
     if (!ok) throw new Error(`${path}: entry ${i} does not match {id, title, usage: meeting|education, path}`);
     if (seen.has(o.id as string)) throw new Error(`${path}: duplicate id "${o.id}"`);
+    if (o.video !== undefined && (typeof o.video !== "string" || o.video === "")) throw new Error(`${path}: entry ${i} "video" must be a file name`);
+    if (o.duration !== undefined && (typeof o.duration !== "number" || !(o.duration > 0))) throw new Error(`${path}: entry ${i} "duration" must be seconds`);
     seen.add(o.id as string);
-    return { id: o.id, title: o.title, usage: o.usage, path: o.path } as ScenarioInfo;
+    const info: ScenarioInfo = { id: o.id as string, title: o.title as string, usage: o.usage as ScenarioInfo["usage"], path: o.path as string };
+    if (o.video !== undefined) info.video = o.video as string;
+    if (o.duration !== undefined) info.duration = o.duration as number;
+    return info;
   });
 }

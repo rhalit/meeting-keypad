@@ -1,0 +1,50 @@
+{
+  "B2B": {
+    "full": "Business-to-business",
+    "explanation": "A company that sells to other companies rather than to individual consumers, like a firm selling accounting software to businesses instead of apps to people. B2B sales usually take longer, involve several decision-makers and contracts, and produce larger deals. Here, the company's customers are other businesses.",
+    "example": "Our B2B pipeline is stuck in KYC",
+    "category": "Business"
+  },
+  "KYC": {
+    "full": "Know Your Customer",
+    "explanation": "Checks a company must run to verify who a customer really is before doing business with them, such as confirming identity, ownership and the source of funds. Banks and fintechs are legally required to do it to prevent fraud and money laundering. It often slows down signing new clients.",
+    "example": "Our B2B pipeline is stuck in KYC",
+    "category": "Law"
+  },
+  "ARR": {
+    "full": "Annual Recurring Revenue",
+    "explanation": "The yearly value of all subscription contracts a company has right now: for example, 200 customers each paying 10,000 per year gives 2 million ARR. Software companies use it as their main growth number because it shows predictable income. 'ARR is flat' means it isn't growing.",
+    "example": "so ARR is flat",
+    "category": "Finance"
+  },
+  "EBITDA": {
+    "full": "Earnings Before Interest, Taxes, Depreciation and Amortization",
+    "explanation": "A measure of how much profit a business makes from its everyday operations, before financing costs, taxes and accounting write-downs are subtracted. Investors use it to compare how well companies actually run. Saying EBITDA is 'vibes' is the joke: there's no solid profit to point to.",
+    "example": "and EBITDA is... well, vibes",
+    "category": "Finance"
+  },
+  "churn": {
+    "full": "Customer churn",
+    "explanation": "The share of customers who stop paying or leave in a given period. If 100 customers start the month and 5 cancel, monthly churn is 5%. High churn means the company keeps losing what it wins, so a 'deep dive on churn' means investigating why customers leave.",
+    "example": "I need a deep dive on churn",
+    "category": "Business"
+  },
+  "go-to-market": {
+    "full": "Go-to-market strategy (GTM)",
+    "explanation": "The plan for how a product reaches its customers: who exactly to sell to, at what price, through which channels and with what message. A 'fresh go-to-market' means rethinking how the company sells, not changing the product itself. It's usually shortened to GTM.",
+    "example": "a fresh go-to-market for the TAM we keep pitching",
+    "category": "Business"
+  },
+  "TAM": {
+    "full": "Total Addressable Market",
+    "explanation": "The total revenue a product could earn if every possible customer bought it. Founders quote it to show how big the opportunity is, for example 'a five-billion-dollar TAM'. The joke here: the team keeps pitching a huge TAM while barely capturing any of it.",
+    "example": "a fresh go-to-market for the TAM we keep pitching",
+    "category": "Business"
+  },
+  "OKRs": {
+    "full": "Objectives and Key Results",
+    "explanation": "A goal-setting method: an Objective is what you want to achieve, and two to four Key Results are measurable numbers that prove you got there, for example 'grow in Germany', measured by '50 new B2B clients'. Popularised by Intel and Google, many companies set them every quarter.",
+    "example": "and OKRs that actually move the needle",
+    "category": "Business"
+  }
+}

@@ -24,6 +24,11 @@ describe("parseSnapshot", () => {
     expect(parseSnapshot(snap({ gaze: { x_px: 2200, y_px: 400 } }))!.sample.onScreen).toBe(false);
   });
 
+  it("an implausible gaze point (more than half a screen outside) is 'unknown', not 'looking away'", () => {
+    expect(parseSnapshot(snap({ gaze: { x_px: -2040, y_px: -7714 } }))!.sample).toEqual({ present: true, onScreen: null });
+    expect(parseSnapshot(snap({ gaze: { x_px: 800, y_px: 1800 } }))!.sample.onScreen).toBeNull();
+  });
+
   it("no face, no gaze -> not present", () => {
     expect(parseSnapshot(snap({ gaze: null, face: null }))!.sample).toEqual({ present: false, onScreen: null });
     expect(parseSnapshot(snap({ gaze: null, face: { bounding_box_norm: null } }))!.sample.present).toBe(false);
@@ -93,7 +98,7 @@ describe("GazeClient (against a local fake tracker)", () => {
     const ws = srv.sockets[0];
     ws.send(JSON.stringify(snap({ timestamp_ms: 10 })));
     ws.send(JSON.stringify(snap({ timestamp_ms: 10 }))); // same frame again
-    ws.send(JSON.stringify(snap({ timestamp_ms: 11, gaze: { x_px: 800, y_px: 2000 } })));
+    ws.send(JSON.stringify(snap({ timestamp_ms: 11, gaze: { x_px: 800, y_px: 1400 } })));
     await until(() => c.samples.length >= 2);
     await new Promise((r) => setTimeout(r, 30));
     expect(c.samples).toEqual([

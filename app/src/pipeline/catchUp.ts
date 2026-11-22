@@ -23,6 +23,11 @@ export function shortSpan(sec: number): string {
   return s < 60 ? `${s}s` : `${Math.round(s / 60)}m`;
 }
 
+/** "30 s", "1 min", "2 min": the window in card titles. */
+export function spanLabel(sec: number): string {
+  return sec < 60 ? `${sec} s` : sec % 60 === 0 ? `${sec / 60} min` : longSpan(sec);
+}
+
 /** "45 s", "2 min 10 s" for card text. */
 export function longSpan(sec: number): string {
   const s = Math.max(0, Math.round(sec));
@@ -50,7 +55,7 @@ export interface CatchUpOptions {
   /** Name on cards and in the log, e.g. "Catch-up" or "Explain simply". */
   name?: string;
   /** Builds the model prompt (default: the 3-line meeting catch-up). */
-  messages?: (lines: TranscriptLine[], listenerName: string | undefined, opts: { away: boolean }) => ChatMessage[];
+  messages?: (lines: TranscriptLine[], listenerName: string | undefined, opts: { away: boolean; windowS?: number }) => ChatMessage[];
   windowS?: number;
   minSpokenS?: number;
   timeoutMs?: number;
@@ -104,7 +109,7 @@ export class CatchUpController {
   private missed: MissedSpan | null = null;
   private missedTimer: TimerHandle | null = null;
   /** Last finished summary and the newest transcript line it covered. */
-  private last: { body: string; lineKey: string } | null = null;
+  private last: { body: string; lineKey: string; windowS: number } | null = null;
   /** Clock ms of the last model call. */
   private lastCallAt: number | null = null;
   /** Every summary the model wrote in this meeting (`t` = meeting seconds of the press), for the export. */
@@ -131,8 +136,10 @@ export class CatchUpController {
     this.tag = this.o.name.toLowerCase();
   }
 
-  press(): CatchUpPress {
+  /** `windowS`: how far back to summarise (the key menu's choice); default 120 s. */
+  press(opts: { windowS?: number } = {}): CatchUpPress {
     const { overlay, log } = this.o;
+    const windowS = opts.windowS ?? this.o.windowS;
     if (this.run) {
       log(`${this.tag}: still running, press ignored`);
       return "ignored";
@@ -144,13 +151,15 @@ export class CatchUpController {
     }
     const latest = this.latestLineKey();
     // A missed span asks for a different summary (from when you looked away), so it skips the re-show guard.
-    if (!this.missed && this.last && latest === this.last.lineKey) {
+    if (!this.missed && this.last && latest === this.last.lineKey && this.last.windowS === windowS) {
       log(`${this.tag}: press re-shows the last summary (no new line since it, no model call)`);
       this.reshow("nothing new");
       return "reshown";
     }
     const sinceCall = this.lastCallAt === null ? Infinity : this.o.clock.now() - this.lastCallAt;
-    if (sinceCall < this.o.cooldownMs) {
+    // A deliberate pick of another duration in the key menu is not a repeated press: no cooldown for it.
+    const otherWindow = opts.windowS !== undefined && this.last !== null && this.last.windowS !== windowS;
+    if (sinceCall < this.o.cooldownMs && !otherWindow) {
       const left = Math.ceil((this.o.cooldownMs - sinceCall) / 1000);
       log(`${this.tag}: press during the ${this.o.cooldownMs / 1000} s cooldown (${left} s left), no model call`);
       if (this.last && !this.missed) {
@@ -177,7 +186,7 @@ export class CatchUpController {
       void p.finally(() => this.inFlight.delete(p));
       return "started";
     }
-    const lines = this.o.transcript.getLast(this.o.windowS, now);
+    const lines = this.o.transcript.getLast(windowS, now);
     if (lines.length === 0 || now - lines[0].t < this.o.minSpokenS) {
       log(`${this.tag}: less than 15 s said, nothing to summarise`);
       this.cardId = overlay.showText({
@@ -187,10 +196,15 @@ export class CatchUpController {
       });
       return "not-much";
     }
-    const p = this.start(lines);
+    const p = this.start(lines, `${this.o.name} · last ${spanLabel(windowS)}`, false, windowS);
     this.inFlight.add(p);
     void p.finally(() => this.inFlight.delete(p));
     return "started";
+  }
+
+  /** Busy, or its card is on screen: a press would be ignored or hide the card (no key menu then). */
+  occupied(): boolean {
+    return this.run !== null || (this.cardId !== null && this.o.overlay.isVisible(this.cardId));
   }
 
   /** Resolves when no run is in progress (tests, smoke script). */
@@ -257,7 +271,7 @@ export class CatchUpController {
     );
   }
 
-  private async start(lines: TranscriptLine[], eyebrow = `${this.o.name} · last 2 min`, away = false): Promise<void> {
+  private async start(lines: TranscriptLine[], eyebrow: string, away: boolean, windowS = this.o.windowS): Promise<void> {
     const { clock, llm, overlay, log } = this.o;
     const cardId = overlay.showText({
       eyebrow,
@@ -279,7 +293,7 @@ export class CatchUpController {
         this.o.timeoutMs,
         async (signal) => {
           for await (const delta of llm.stream({
-            messages: this.o.messages(lines, this.o.listenerName, { away }),
+            messages: this.o.messages(lines, this.o.listenerName, { away, windowS }),
             maxTokens: 700,
             temperature: 0.3,
             signal,
@@ -308,7 +322,7 @@ export class CatchUpController {
       const body = cleanBullets(run.text);
       if (!body) throw new LlmError("bad_response", "The model returned no text");
       overlay.finishText(cardId, this.o.visibleMs, body);
-      this.last = { body, lineKey };
+      this.last = { body, lineKey, windowS };
       this.summaries.push({ t: at, body });
       log(`${this.tag}: done in ${clock.now() - run.startedAt} ms`);
       this.o.onLlmOutcome?.({ ok: true });

@@ -1,0 +1,12 @@
+[
+  {"t": 0.4, "speaker": "CEO", "text": "Quick sync.", "terms": [], "words": [0.4, 0.62]},
+  {"t": 2.64, "speaker": "CEO", "text": "Our B2B pipeline is stuck in KYC,", "terms": ["B2B", "KYC"], "words": [2.64, 3.68, 4.72, 5.2, 5.36, 5.68, 5.84]},
+  {"t": 6.8, "speaker": "CEO", "text": "so ARR is flat", "terms": ["ARR"], "words": [6.8, 7.04, 7.68, 8]},
+  {"t": 8.72, "speaker": "CEO", "text": "and EBITDA is... well, vibes.", "terms": ["EBITDA"], "words": [8.72, 8.88, 9.52, 10.32, 10.96]},
+  {"t": 12.08, "speaker": "CEO", "text": "Decision: we pause the EU launch until KYC is fixed.", "terms": [], "words": [12.08, 12.88, 13.12, 13.44, 13.6, 13.92, 14.24, 14.56, 15.12, 15.44]},
+  {"t": 15.97, "speaker": "CEO", "text": "I need a deep dive on churn,", "terms": ["churn"], "words": [15.97, 16.21, 16.38, 16.54, 16.77, 16.93, 17.18]},
+  {"t": 17.66, "speaker": "CEO", "text": "a fresh go-to-market for the TAM we keep pitching,", "terms": ["go-to-market", "TAM"], "words": [17.66, 17.82, 18.21, 18.61, 18.77, 18.94, 19.34, 19.57, 19.82]},
+  {"t": 20.38, "speaker": "CEO", "text": "and OKRs that actually move the needle.", "terms": ["OKRs"], "words": [20.38, 20.54, 21.18, 21.41, 21.89, 22.14, 22.3]},
+  {"t": 22.86, "speaker": "CEO", "text": "Let's circle back!", "terms": [], "words": [22.86, 23.26, 23.57]},
+  {"t": 24.14, "speaker": "CEO", "text": "{listener}, can you own the KYC fix by Friday?", "terms": [], "words": [24.14, 24.7, 24.86, 25.02, 25.18, 25.34, 25.82, 26.14, 26.38]}
+]

@@ -9,3 +9,8 @@ tools/audiotee/src/
 tools/audiotee/bin/
 tools/mock-audio/
 tools/recordings/
+
+# Original screen recording of the Zoom demo (87 MB); the app plays the compressed video.mp4
+mock/scenarios/*/source.mov
+# Third-party lecture clip (MIT 6.S191) for the Education video demo: local only
+mock/scenarios/nn-lecture/video.mp4

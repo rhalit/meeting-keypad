@@ -107,6 +107,38 @@ describe("CatchUpController", () => {
     expect(clock.pending()).toBe(0);
   });
 
+  it("press({ windowS }) summarises that span (key menu): card title and prompt follow it", async () => {
+    talk(400);
+    expect(catchUp.press({ windowS: 30 })).toBe("started");
+    expect(text().eyebrow).toBe("Catch-up · last 30 s");
+    const req = llm.last().req;
+    const user = req.messages.find((m) => m.role === "user")!.content;
+    expect(user).toContain("line at 370");
+    expect(user).not.toContain("line at 365");
+    expect(req.messages[0].content).toContain("the last 30 seconds of the transcript");
+    llm.last().push("- Said: x").end();
+    await catchUp.whenIdle();
+    catchUp.press(); // hides the card
+    // Same window, nothing new: re-shown. Another window right away: a new summary despite the cooldown.
+    expect(catchUp.press({ windowS: 30 })).toBe("reshown");
+    catchUp.press();
+    expect(catchUp.press({ windowS: 600 })).toBe("started");
+    expect(text().eyebrow).toBe("Catch-up · last 10 min");
+    expect(llm.calls).toHaveLength(2);
+  });
+
+  it("occupied() while running or while its card is visible", async () => {
+    talk(200);
+    expect(catchUp.occupied()).toBe(false);
+    catchUp.press();
+    expect(catchUp.occupied()).toBe(true);
+    llm.last().push("- Said: x").end();
+    await catchUp.whenIdle();
+    expect(catchUp.occupied()).toBe(true); // finished card on screen
+    catchUp.press();
+    expect(catchUp.occupied()).toBe(false);
+  });
+
   it("warns when the first token takes over 3 s", async () => {
     talk(60);
     catchUp.press();

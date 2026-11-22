@@ -35,11 +35,17 @@ export function osaDistance(a: string, b: string): number {
 
 /** Shortest word that may match the name with one edit (shorter words collide with ordinary words). */
 const FUZZY_MIN_LETTERS = 4;
+/**
+ * Shortest NAME that gets one-edit matching at all. Short names sit one edit from everyday words
+ * ("Alex": "flex", "apex", "Alexa"), so they match exactly (name + aliases) only.
+ */
+const FUZZY_MIN_NAME_LETTERS = 5;
 
 /**
  * The words of `text` that name the listener, or null.
  * - The name and every alias match exactly (case, accents and punctuation ignored; multi-word aliases as a phrase).
- * - Close spellings of the NAME (one edit or swap, words of 4+ letters: "Rhaly", "Rahli", "Rali") match too.
+ * - Close spellings of the NAME (one edit or swap, words of 4+ letters: "Rhaly", "Rahli", "Rali") match too,
+ *   for names of 5+ letters; a short name like "Alex" relies on its aliases ("Alec", "Alix") instead.
  *   Aliases are not fuzzy-matched on purpose: one edit from "Rally" is "really", which would trigger on most lines.
  */
 export function mentionsListener(text: string, names: ListenerNames): string | null {
@@ -52,7 +58,7 @@ export function mentionsListener(text: string, names: ListenerNames): string | n
     }
   }
   const name = nameWords(names.name);
-  if (name.length === 1 && name[0].length >= FUZZY_MIN_LETTERS) {
+  if (name.length === 1 && name[0].length >= FUZZY_MIN_NAME_LETTERS) {
     for (const w of words) {
       if (w.length >= FUZZY_MIN_LETTERS && osaDistance(w, name[0]) <= 1) return w;
     }

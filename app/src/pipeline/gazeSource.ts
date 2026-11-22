@@ -55,7 +55,10 @@ export function parseSnapshot(msg: unknown, marginFrac = 0.1): ParsedSnapshot | 
   if (hasGaze && num(w) && num(h) && w > 0 && h > 0) {
     const mx = w * marginFrac;
     const my = h * marginFrac;
-    onScreen = g.x_px >= -mx && g.x_px <= w + mx && g.y_px >= -my && g.y_px <= h + my;
+    // More than half a screen outside the display is not a real gaze point (a poor calibration's fallback
+    // estimate): direction unknown, so a visible face counts as present rather than as looking away.
+    const implausible = g.x_px < -w / 2 || g.x_px > w * 1.5 || g.y_px < -h / 2 || g.y_px > h * 1.5;
+    onScreen = implausible ? null : g.x_px >= -mx && g.x_px <= w + mx && g.y_px >= -my && g.y_px <= h + my;
   }
   const st = m.state ?? {};
   return {

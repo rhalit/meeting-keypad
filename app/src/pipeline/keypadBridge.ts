@@ -29,9 +29,15 @@ export interface PressEvent {
   ts: number;
 }
 
+/** The plugin's Back ("left") / Forward ("right") action, e.g. on the keypad's arrow buttons. */
+export interface NavEvent {
+  dir: "left" | "right";
+  ts: number;
+}
+
 /**
  * WebSocket server for the keypad plugin (protocol/messages.md), same behaviour as tools/fake-core.mjs:
- * all 9 slots right after `hello`, afterwards only changed slots. Events: `press` (PressEvent),
+ * all 9 slots right after `hello`, afterwards only changed slots. Events: `press` (PressEvent), `nav` (NavEvent),
  * `connected` / `disconnected` (number of plugins that said hello), `listening` (port).
  */
 export class KeypadBridge extends EventEmitter {
@@ -116,7 +122,7 @@ export class KeypadBridge extends EventEmitter {
   }
 
   private onMessage(ws: WebSocket, text: string): void {
-    let msg: { type?: unknown; slot?: unknown; ts?: unknown; plugin?: unknown; version?: unknown };
+    let msg: { type?: unknown; slot?: unknown; ts?: unknown; plugin?: unknown; version?: unknown; dir?: unknown };
     try {
       msg = JSON.parse(text);
     } catch {
@@ -136,6 +142,13 @@ export class KeypadBridge extends EventEmitter {
       }
       const ts = typeof msg.ts === "number" ? msg.ts : Date.now();
       this.emit("press", { slot: msg.slot, ts } satisfies PressEvent);
+    } else if (msg.type === "nav") {
+      if (msg.dir !== "left" && msg.dir !== "right") {
+        this.log(`nav with invalid dir: ${text}`);
+        return;
+      }
+      const ts = typeof msg.ts === "number" ? msg.ts : Date.now();
+      this.emit("nav", { dir: msg.dir, ts } satisfies NavEvent);
     } else {
       this.log(`unknown message: ${text}`);
     }

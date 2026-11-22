@@ -1,0 +1,7 @@
+[
+  {"t": 0.0, "speaker": "Lecturer", "text": "Now I'll conclude this lecture by first summarizing the three main points that we've covered so far.", "terms": [], "words": [0, 0.4, 0.56, 0.8, 0.96, 1.2, 2, 2.24, 2.64, 2.96, 3.12, 3.36, 3.6, 3.68, 4, 4.4, 4.64]},
+  {"t": 4.96, "speaker": "Lecturer", "text": "So first, we learned about the fundamental building block of neural networks, the perceptron, a single neuron.", "terms": ["neural network", "perceptron", "neuron"], "words": [4.96, 5.04, 5.36, 5.44, 5.76, 5.92, 6, 6.48, 6.8, 7.12, 7.44, 7.76, 8.24, 8.4, 8.88, 9.04, 9.2]},
+  {"t": 9.92, "speaker": "Lecturer", "text": "We learned about stacking and composing these types of, of neurons together to form layers and full networks.", "terms": ["layer"], "words": [9.92, 10.08, 10.24, 10.4, 10.72, 10.96, 11.36, 11.92, 12.24, 12.91, 13.31, 13.88, 14.2, 14.43, 14.6, 14.91, 15.15, 15.39]},
+  {"t": 16.04, "speaker": "Lecturer", "text": "Then finally, we learned about how to actually complete the whole puzzle and train these neural networks end to end using some loss function.", "terms": ["loss function"], "words": [16.27, 16.43, 16.75, 16.84, 17.07, 17.23, 17.39, 17.48, 17.71, 17.95, 18.04, 18.2, 18.43, 18.75, 18.99, 19.15, 19.39, 19.64, 19.8, 19.95, 20.11, 20.36, 20.52, 20.75]},
+  {"t": 20.99, "speaker": "Lecturer", "text": "And using gradient descent and backpropagation.", "terms": ["gradient descent", "backpropagation"], "words": [20.99, 21.23, 21.64, 22.2, 22.43, 22.6]}
+]

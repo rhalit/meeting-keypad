@@ -1,12 +1,14 @@
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from "electron";
 import { AudioCapture } from "../pipeline/audioCapture.js";
 import { CatchUpController, longSpan, type LlmOutcome } from "../pipeline/catchUp.js";
 import { FlashcardController, QuizController, fileFlashcards } from "../pipeline/education.js";
 import { realClock } from "../pipeline/clock.js";
 import { FocusTracker, type AwayPeriod, type FocusStatus } from "../pipeline/focus.js";
 import { DEFAULT_GAZE_URL, GazeClient, type GazeStatus } from "../pipeline/gazeSource.js";
-import { DEFAULT_PORT, KeypadBridge, PortInUseError, type PressEvent } from "../pipeline/keypadBridge.js";
+import { DEFAULT_PORT, KeypadBridge, PortInUseError, type NavEvent, type PressEvent } from "../pipeline/keypadBridge.js";
 import {
   LlmError,
   MisconfiguredClient,
@@ -25,6 +27,7 @@ import { MeetingRecord } from "../pipeline/meetingRecord.js";
 import { LatencyTracker, formatLatency } from "../pipeline/latency.js";
 import { TermSpotter, type SpotInfo } from "../pipeline/termSpotter.js";
 import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
+import { KeypadMenu } from "../pipeline/keypadMenu.js";
 import { MentionAlert } from "../pipeline/mentionAlert.js";
 import { loadConfig, loadGlossary, loadMeeting, loadScenarioIndex } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
@@ -33,12 +36,14 @@ import { PressDebouncer } from "../pipeline/pressGuard.js";
 import { actionKeysFor, type KeyState, type Usage } from "../pipeline/protocol.js";
 import { explainSimplyMessages } from "../pipeline/prompts.js";
 import { loadSettings, parseKeyBgArg, saveSettings, type Settings } from "../pipeline/settings.js";
-import { SaveController, fileSavedIdeas } from "../pipeline/save.js";
+import { SaveController } from "../pipeline/save.js";
+import { SessionStore } from "../pipeline/sessions.js";
 import { SlotManager } from "../pipeline/slots.js";
 import { SttError, deepgramFactory, loadSttConfig, parseKeyterms, sttAdvice, type SttFactory } from "../pipeline/stt.js";
 import type { TermCandidate } from "../pipeline/terms.js";
 import { TranscriptBuffer, type TranscriptLine } from "../pipeline/transcriptBuffer.js";
 import { OverlayWindow } from "./overlayWindow.js";
+import { VideoWindow } from "./videoWindow.js";
 import type { PanelCommand, PanelExport, PanelLine, PanelLlm, PanelMode, PanelSnapshot } from "./panelTypes.js";
 
 const ts = () => new Date().toISOString().slice(11, 23);
@@ -48,7 +53,6 @@ const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec %
 
 const appRoot = app.getAppPath(); // .../app
 const mockDir = join(appRoot, "..", "mock");
-const savedIdeasPath = join(appRoot, "..", "output", "saved-ideas.md");
 const meetingsDir = join(appRoot, "..", "output", "meetings");
 
 const flashcardsPath = join(appRoot, "..", "output", "flashcards.csv");
@@ -61,7 +65,8 @@ let settings: Settings = loadSettings(settingsPath);
 
 // --- mock scenarios (mock/scenarios/index.json): several meetings and lectures, one chosen per mode ----------
 const scenarios = loadScenarioIndex(join(mockDir, "scenarios", "index.json"));
-const DEFAULT_SCENARIO: Record<Usage, string> = { meeting: "sprint", education: "lecture" };
+// The recorded videos (in sync with Play / Pause) are the default demos: the Zoom call, the MIT lecture recap.
+const DEFAULT_SCENARIO: Record<Usage, string> = { meeting: "zoom-business", education: "nn-lecture" };
 const scenarioInfo = (id: string) => scenarios.find((x) => x.id === id);
 /** The chosen scenario for a mode: MOCK_SCENARIO (meeting, at startup), the saved choice, else the default. */
 const chosen: Record<Usage, string> = { meeting: DEFAULT_SCENARIO.meeting, education: DEFAULT_SCENARIO.education };
@@ -97,7 +102,48 @@ function updateSettings(next: Settings): void {
   pushSnapshot();
 }
 const bridge = new KeypadBridge({ initial: slots.getAll(), log: (m) => log(`[keypad] ${m}`) });
-const mockSource = new MockSource(meeting, glossary, clock);
+const mockSource = new MockSource(meeting, glossary, clock, scenarioInfo(scenarioFor(usage))?.duration);
+
+// --- video scenarios: a recorded call plays in its own window, in step with the mock playback ----------
+// Play is pressed in the IntelliPad window, so the video may start with sound without a click of its own.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+const videoWindow = new VideoWindow({ appRoot, log: (m) => log(`[video] ${m}`) });
+
+// --- Saved view: saved ideas and flashcards per meeting / course (userData/sessions.json) -------------
+const sessions = new SessionStore(join(app.getPath("userData"), "sessions.json"), () => Date.now(), log);
+const flashcardsCsv = fileFlashcards(flashcardsPath);
+/** Start of the current Live listening session (its Saved entry), or null before the first Start. */
+let liveSessionAt: number | null = null;
+
+/** Where saves go: the mock scenario, or the Live listening session. */
+function openSession(): void {
+  const kind = usage === "education" ? "course" : "meeting";
+  if (mode === "mock") {
+    const info = scenarioInfo(scenarioFor(usage));
+    sessions.open({ id: `mock:${scenarioFor(usage)}`, title: info?.title ?? scenarioFor(usage), kind, source: "mock" });
+    return;
+  }
+  const at = liveSessionAt ?? Date.now();
+  const when = new Date(at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  sessions.open({ id: `live:${at}`, title: `${kind === "course" ? "Live lecture" : "Live meeting"} · ${when}`, kind, source: "live" });
+}
+
+function savedSnapshot() {
+  return { currentId: sessions.currentId(), current: sessions.current(), sessions: sessions.list() };
+}
+sessions.on("change", () => send("saved", savedSnapshot()));
+
+/** Open the scenario's video in Mock mode, close it otherwise (Live, or a scenario without one). */
+function applyVideo(): void {
+  const info = scenarioInfo(scenarioFor(usage));
+  const file = info?.video ? join(mockDir, info.path, info.video) : null;
+  if (mode === "mock" && file && existsSync(file)) videoWindow.open(file, info!.title);
+  else {
+    // A third-party clip is kept out of git: without the file the scenario still plays as text.
+    if (mode === "mock" && file) log(`[video] ${file} not found: playing "${info!.title}" without the video`);
+    videoWindow.close();
+  }
+}
 let mode: PanelMode = "mock";
 const playedLines: PanelLine[] = [];
 // Mock terms explain from the glossary, live terms from the Explainer (set up below).
@@ -221,7 +267,13 @@ const flashcards = new FlashcardController({
   overlay,
   log,
   onLlmOutcome,
-  file: fileFlashcards(flashcardsPath),
+  // Anki CSV (output/flashcards.csv) and the course's Saved view.
+  file: {
+    append: async (card) => {
+      await flashcardsCsv.append(card);
+      sessions.addCard(card);
+    },
+  },
 });
 const quiz = new QuizController({ clock, llm, transcript, meetingTime, keys: slots, overlay, log, onLlmOutcome });
 
@@ -241,8 +293,12 @@ const focus = new FocusTracker({ clock, meetingTime });
 // Away + a "For me?" question: all keys pulse; looking back or any press opens the For-me card.
 const mentionAlert = new MentionAlert({ clock, focus, keys: slots, overlay, log, reveal: () => void forMe.press() });
 
-gaze.on("sample", (s) => focus.sample(s));
-gaze.on("live", (live: boolean) => focus.setCameraLive(live));
+// The camera only counts in Live mode. In Mock mode "away" comes from the Demo row (Simulate away) alone,
+// so "Simulate a question for me" pulses only the For-me key unless Simulate away is on too.
+gaze.on("sample", (s) => {
+  if (mode === "live") focus.sample(s);
+});
+gaze.on("live", (live: boolean) => focus.setCameraLive(live && mode === "live"));
 gaze.on("status", (_s: GazeStatus) => pushSnapshot());
 focus.on("change", (s: FocusStatus) => {
   log(`[focus] ${s.state}${s.reason ? ` (${s.reason})` : ""}`);
@@ -261,7 +317,10 @@ const saver = new SaveController({
   meetingTime,
   keys: slots,
   overlay,
-  file: fileSavedIdeas(savedIdeasPath),
+  // Saved ideas live in the app (Saved view, per meeting / course), not in a Markdown file.
+  onSaved: (idea) => {
+    if (sessions.addIdea(idea)) log(`saved to "${sessions.current()?.title ?? "?"}": ${idea.title}`);
+  },
   log,
   onLlmOutcome,
 });
@@ -319,6 +378,28 @@ function snapshot(): PanelSnapshot {
   };
 }
 
+// --- MX Brio: is it plugged in? (macOS camera list; no camera permission needed) ------------------------
+let brio: PanelSnapshot["focus"]["brio"] = { connected: false, checked: false };
+function checkBrio(): void {
+  execFile("system_profiler", ["SPCameraDataType", "-json"], { timeout: 8000 }, (err, out) => {
+    let names: string[] = [];
+    if (!err) {
+      try {
+        names = (JSON.parse(out).SPCameraDataType ?? []).map((c: { _name?: string }) => c._name ?? "");
+      } catch {
+        names = [];
+      }
+    }
+    const name = names.find((n) => /mx\s*brio/i.test(n)) ?? names.find((n) => /brio/i.test(n));
+    const next = { connected: !!name, name, checked: true };
+    if (next.connected !== brio.connected || !brio.checked) {
+      log(`[camera] MX Brio ${next.connected ? `connected (${name})` : "not found"}`);
+      brio = next;
+      pushSnapshot();
+    }
+  });
+}
+
 function focusSnapshot(): PanelSnapshot["focus"] {
   const f = focus.status();
   const m = catchUp.missedSpan();
@@ -330,6 +411,7 @@ function focusSnapshot(): PanelSnapshot["focus"] {
     camera: gaze.status(),
     missed: m ? longSpan(m.to - m.from) : undefined,
     mentionFlashing: mentionAlert.isFlashing(),
+    brio,
   };
 }
 
@@ -370,7 +452,8 @@ slots.on("placed", ({ candidate }: { slot: number; candidate: TermCandidate }) =
 function onLine(line: LiveLine): void {
   transcript.add(line);
   record.addLine(line);
-  const pl: PanelLine = { t: line.t, speaker: line.speaker, text: line.text, terms: line.terms };
+  const wordTimes = (line as { wordTimes?: number[] }).wordTimes;
+  const pl: PanelLine = { t: line.t, speaker: line.speaker, text: line.text, terms: line.terms, ...(wordTimes ? { words: wordTimes } : {}) };
   playedLines.push(pl);
   log(`[${mmss(line.t)}] ${line.speaker ?? "?"}: ${line.text}`);
   send("line", pl);
@@ -380,6 +463,7 @@ function onLine(line: LiveLine): void {
 /** A new meeting: mock Restart, Start listening, or a Mock/Live switch. */
 function resetMeeting(why: string): void {
   log(`reset (${why})`);
+  menu.close();
   catchUp.cancel();
   saver.reset();
   explain.cancel();
@@ -406,7 +490,10 @@ mockSource.on("term", (c: TermCandidate) => {
 });
 mockSource.on("unknownTerm", (term: string) => log(`WARNING: term "${term}" is not in mock/glossary.json, skipped`));
 mockSource.on("restart", () => resetMeeting("restart"));
-mockSource.on("state", pushSnapshot);
+mockSource.on("state", () => {
+  pushSnapshot();
+  videoWindow.sync(mockSource.state());
+});
 mockSource.on("end", () => {
   log("meeting finished");
   exportMeeting("end of the mock meeting", true);
@@ -450,7 +537,11 @@ async function setMode(m: PanelMode): Promise<void> {
     switchingMode = false;
   }
   mode = m;
+  if (m === "mock") focus.setCameraLive(false); // forget the camera's state; Live picks it up again from the next frame
+  else focus.setSimulatedAway(false); // the Demo row is hidden in Live: never leave a simulation running there
   resetMeeting(`mode ${m}`);
+  applyVideo();
+  openSession();
   pushSnapshot();
 }
 
@@ -459,8 +550,10 @@ function setUsage(u: Usage): void {
   if (u === usage) return;
   usage = u;
   ({ meeting, glossary } = loadScenario(scenarioFor(u)));
-  mockSource.load(meeting, glossary);
+  mockSource.load(meeting, glossary, scenarioInfo(scenarioFor(u))?.duration);
   resetMeeting(`usage ${u}`);
+  applyVideo();
+  openSession();
   slots.setActionKeys(actionKeysFor(u));
   log(`usage: ${u}, scenario "${scenarioFor(u)}" (${meeting.length} mock lines, ${Object.keys(glossary).length} glossary terms)`);
   pushSnapshot();
@@ -476,8 +569,10 @@ function setScenario(id: string): void {
   if (id === chosen[usage]) return;
   chosen[usage] = id;
   ({ meeting, glossary } = loadScenario(id));
-  mockSource.load(meeting, glossary);
+  mockSource.load(meeting, glossary, info.duration);
   resetMeeting(`scenario ${id}`);
+  applyVideo();
+  openSession();
   log(`scenario: ${info.title} (${meeting.length} lines, ${Object.keys(glossary).length} glossary terms)`);
   updateSettings({ ...settings, scenario: { ...settings.scenario, [usage]: id } });
 }
@@ -495,7 +590,20 @@ function startListening(text: string): void {
   const keyterms = parseKeyterms([config.listenerName, ...config.listenerAliases, text, ...learnedKeyterms]);
   log(`listening${keyterms.length ? ` (keyterms: ${keyterms.join(", ")})` : ""}`);
   liveSource.start(keyterms);
+  liveSessionAt = Date.now();
+  openSession();
 }
+
+// --- key menus: Catch-up / Save first ask how far back (protocol/messages.md, "Key menus") -------------
+const menu = new KeypadMenu({
+  clock,
+  keys: slots,
+  log,
+  onPick: (m, seconds) => {
+    const outcome = m === "catch-up" ? catchUp.press({ windowS: seconds }) : saver.press({ windowS: seconds });
+    log(`${m} over the last ${seconds} s -> ${outcome}`);
+  },
+});
 
 /** Same-slot repeats within 300 ms are dropped (a bumped keypad, a bouncing key). */
 const debouncer = new PressDebouncer(clock);
@@ -509,6 +617,10 @@ bridge.on("press", ({ slot }: PressEvent) => {
   }
   if (mentionAlert.consumePress()) {
     log(`PRESS slot ${slot}: stopped the away-mention pulse`);
+    return;
+  }
+  if (menu.isOpen()) {
+    log(`PRESS slot ${slot}: ${menu.openMenu()} menu -> ${menu.press(slot)}`);
     return;
   }
   const r = slots.press(slot);
@@ -526,6 +638,16 @@ bridge.on("press", ({ slot }: PressEvent) => {
     }
     case "action": {
       const before = overlay.current()?.id;
+      // Catch-up / Save ask how far back first, unless Catch-up shows "Missed" (summarises that span),
+      // is busy or has its card up (the press hides it), or Save is busy.
+      if (r.action === "catch-up" && !catchUp.missedSpan() && !catchUp.occupied()) {
+        menu.open("catch-up");
+        break;
+      }
+      if (r.action === "save" && !saver.busyNow()) {
+        menu.open("save");
+        break;
+      }
       const outcome =
         r.action === "catch-up"
           ? catchUp.press()
@@ -554,6 +676,10 @@ bridge.on("press", ({ slot }: PressEvent) => {
   }
 });
 bridge.on("connected", pushSnapshot);
+bridge.on("nav", ({ dir }: NavEvent) => {
+  if (dir === "left" && menu.back()) return;
+  log(`NAV ${dir}: nothing to go back from`);
+});
 
 // --- meeting export (output/meetings/<YYYY-MM-DD HHmm>.md) --------------------------------------
 
@@ -627,7 +753,7 @@ bridge.on("disconnected", pushSnapshot);
 
 // --- panel ---------------------------------------------------------------------------------
 
-ipcMain.handle("panel:init", () => ({ snapshot: snapshot(), lines: playedLines, listener: config.listenerName }));
+ipcMain.handle("panel:init", () => ({ snapshot: snapshot(), lines: playedLines, listener: config.listenerName, saved: savedSnapshot() }));
 
 ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
   if (cmd !== "keyterms") log(`panel: ${cmd}`);
@@ -702,6 +828,11 @@ ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
       // Goes through the real "For me?" check (one model call), as if this line had been said.
       forMe.addLine({ t: meetingTime(), speaker: "Demo", text: `${config.listenerName}, can you send me the latency numbers by Friday?` });
       break;
+    case "open-gaze-tracker":
+      execFile("open", ["-a", "Gaze Tracker"], (err) => {
+        if (err) log(`[camera] could not open the Gaze Tracker app: ${err.message}`);
+      });
+      break;
     case "gaze-calibrate":
       if (!gaze.calibrate()) log("[camera] cannot calibrate: Gaze Tracker not connected");
       break;
@@ -715,9 +846,13 @@ function panelBackground(theme: "dark" | "light"): string {
 
 function createPanel(): void {
   // Compact companion window next to the meeting: native title bar inset into the toolbar (panel.css).
+  // Docked at the right edge, so a video scenario (top-left) and the pop-up cards (bottom-left) stay clear of it.
+  const { workArea } = screen.getPrimaryDisplay();
   panel = new BrowserWindow({
+    x: workArea.x + workArea.width - 360 - 24,
+    y: workArea.y + 24,
     width: 360,
-    height: 640,
+    height: Math.min(640, workArea.height - 48),
     minWidth: 320,
     minHeight: 460,
     title: "IntelliPad",
@@ -756,11 +891,15 @@ app.whenReady().then(async () => {
     return;
   }
 
-  overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, log: (m) => log(`[overlay] ${m}`) });
+  overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, onClose: () => overlay.hide("dismiss"), log: (m) => log(`[overlay] ${m}`) });
   overlayWindow.setTheme(settings.theme);
   createPanel();
+  applyVideo();
+  openSession();
   void runWarmUp();
   gaze.start(); // retries every 2 s, so the Gaze Tracker app can start before or after us
+  checkBrio();
+  setInterval(checkBrio, 10_000); // plugged in / out
   if (!(spotterLlm instanceof MisconfiguredClient)) {
     void warmUp(spotterLlm, clock).then((r) =>
       log(r.ok ? `[spotter-llm] warm-up ok: ${spotterLlm.describe()} in ${r.ms} ms` : `[spotter-llm] WARNING: warm-up failed: ${r.error.kind}: ${r.error.message}`),
@@ -774,12 +913,14 @@ app.whenReady().then(async () => {
   }
   setInterval(() => {
     if (mockSource.state().playing || liveSource.isListening() || focus.status().state !== "off") pushSnapshot();
+    if (mockSource.state().playing) videoWindow.sync(mockSource.state()); // keeps the video within 0.35 s
   }, 500);
 });
 
 app.on("window-all-closed", () => app.quit());
 app.on("before-quit", () => {
   quitting = true;
+  videoWindow.close();
   forMe.reset();
   catchUp.cancel();
   saver.reset();

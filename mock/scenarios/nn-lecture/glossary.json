@@ -1,0 +1,44 @@
+{
+  "neural network": {
+    "full": "Artificial neural network",
+    "explanation": "A computer model loosely inspired by the brain, made of many simple units called neurons, connected in layers. Each connection has a weight, a number the network adjusts while it learns from examples. Stack enough layers and the network can learn complex tasks like recognising images or understanding speech.",
+    "example": "of neural networks, the perceptron, a single neuron",
+    "category": "Tech"
+  },
+  "perceptron": {
+    "full": "Perceptron",
+    "explanation": "The simplest possible neural network: a single artificial neuron. It multiplies each input by a weight, adds them up together with a bias, and passes the result through an activation function to produce an output. Invented in the 1950s, it is the building block that modern deep networks are made of.",
+    "example": "of neural networks, the perceptron, a single neuron",
+    "category": "Tech"
+  },
+  "neuron": {
+    "full": "Artificial neuron",
+    "explanation": "One computing unit in a neural network. It takes several numbers as input, weighs how important each one is, adds them up and decides how strongly to 'fire' using an activation function. On its own it is very simple; thousands or millions of them together can learn surprisingly complex patterns.",
+    "example": "the perceptron, a single neuron",
+    "category": "Tech"
+  },
+  "layer": {
+    "full": "Layer (of a neural network)",
+    "explanation": "A group of neurons that all work at the same step. Data flows from the input layer through one or more hidden layers to the output layer, and each layer transforms it a little more. 'Deep' learning simply means using networks with many layers stacked on top of each other.",
+    "example": "neurons together to form layers and full networks",
+    "category": "Tech"
+  },
+  "loss function": {
+    "full": "Loss function",
+    "explanation": "A formula that scores how wrong the network's predictions are compared with the correct answers: a big loss means bad predictions, a small loss means good ones. Training a network is essentially a search for the weights that make this number as small as possible. It is also called the cost or objective function.",
+    "example": "train these neural networks end to end using some loss function",
+    "category": "Science"
+  },
+  "gradient descent": {
+    "full": "Gradient descent",
+    "explanation": "The method used to make the loss smaller, step by step. Imagine standing on a hilly landscape in fog: you feel which way the ground slopes downward and take a small step that way, again and again. The gradient tells you the slope; the size of each step is called the learning rate.",
+    "example": "And using gradient descent and backpropagation",
+    "category": "Science"
+  },
+  "backpropagation": {
+    "full": "Backpropagation",
+    "explanation": "The algorithm that works out how much each weight in the network contributed to the error. It starts from the loss at the output and moves backwards through the layers, using the chain rule from calculus. Gradient descent then uses these values to nudge every weight in the right direction.",
+    "example": "And using gradient descent and backpropagation",
+    "category": "Science"
+  }
+}

@@ -38,6 +38,7 @@ interface PanelLiveMsg {
   learnedKeyterms: string[];
 }
 interface PanelFocusMsg {
+  brio: { connected: boolean; name?: string; checked: boolean };
   state: "off" | "focused" | "away";
   reason?: "no-face" | "off-screen" | "simulated";
   forMs: number;
@@ -66,16 +67,45 @@ interface PanelLineMsg {
   speaker?: string;
   text: string;
   terms: string[];
+  words?: number[];
 }
 interface PanelInterimMsg {
   t: number;
   speaker?: string;
   text: string;
 }
+interface SavedIdeaMsg {
+  title: string;
+  summary: string;
+  quote: string;
+  t: number;
+  savedAt: number;
+}
+interface SavedCardMsg {
+  front: string;
+  back: string;
+  t: number;
+  savedAt: number;
+}
+interface SessionMsg {
+  id: string;
+  title: string;
+  kind: "meeting" | "course";
+  source: "mock" | "live";
+  startedAt: number;
+  updatedAt: number;
+  ideas: SavedIdeaMsg[];
+  cards: SavedCardMsg[];
+}
+interface SavedMsg {
+  currentId: string | null;
+  current: SessionMsg | null;
+  sessions: SessionMsg[];
+}
 interface KeypadApi {
-  init(): Promise<{ snapshot: PanelSnapshotMsg; lines: PanelLineMsg[]; listener: string }>;
+  init(): Promise<{ snapshot: PanelSnapshotMsg; lines: PanelLineMsg[]; listener: string; saved: SavedMsg }>;
   control(cmd: string, arg?: string): void;
-  on(channel: "snapshot" | "line" | "reset" | "interim" | "level", cb: (payload: any) => void): void;
+  on(channel: "snapshot" | "line" | "reset" | "interim" | "level" | "saved", cb: (payload: any) => void): void;
 }
 interface Window {
   keypad: KeypadApi;
@@ -94,6 +124,10 @@ const mockTimeEl = $("mock-time");
 const exportBtn = $<HTMLButtonElement>("export");
 const settingsBtn = $<HTMLButtonElement>("settings-btn");
 const settingsEl = $("settings");
+const savedBtn = $<HTMLButtonElement>("saved-btn");
+const savedEl = $("saved");
+const savedBody = $("saved-body");
+const savedCount = $("saved-count");
 
 const mockControls = $("mock-controls");
 const playBtn = $<HTMLButtonElement>("play");
@@ -123,6 +157,10 @@ const emptyEl = $("empty");
 const pluginEl = $("plugin");
 const llmEl = $("llm");
 const focusEl = $("focus-pill");
+const brioStatus = $<HTMLButtonElement>("brio-status");
+const brioText = $("brio-text");
+const openGazeBtn = $<HTMLButtonElement>("open-gaze");
+const meterEl = $("meter");
 const exportText = $("export-text");
 
 const modeMockBtn = $<HTMLButtonElement>("mode-mock");
@@ -136,6 +174,7 @@ const bgResetBtn = $<HTMLButtonElement>("bg-reset");
 const cameraText = $("camera-text");
 const cameraError = $("camera-error");
 const calibrateBtn = $<HTMLButtonElement>("gaze-calibrate");
+const simTools = $("sim-tools");
 const simAwayBtn = $<HTMLButtonElement>("sim-away");
 const simMentionBtn = $<HTMLButtonElement>("sim-mention");
 const diagLlm = $("diag-llm");
@@ -143,7 +182,37 @@ const sttText = $("stt-text");
 const spotterText = $("spotter-text");
 
 const BG_TARGETS = ["terms", "6", "7", "8"] as const;
-const bgInputs = BG_TARGETS.map((t) => $<HTMLInputElement>(`bg-${t}`));
+/**
+ * Preset keypad colours, named after the two worlds the app serves. Meeting tones: Ink, Focus, Indigo, Teal
+ * (calm, professional). Classroom tones: Chalkboard, Sage, Pencil, Terracotta, Paper (Paper is light: the
+ * keypad then draws dark text). Black is the keypad's own default, sent as "no colour".
+ */
+const KEY_PALETTE: { name: string; hex: string }[] = [
+  { name: "Black", hex: "#000000" },
+  { name: "Ink", hex: "#1E2B3C" },
+  { name: "Focus", hex: "#2F5D9E" },
+  { name: "Indigo", hex: "#3F4A8A" },
+  { name: "Teal", hex: "#22706C" },
+  { name: "Chalkboard", hex: "#2F4F3E" },
+  { name: "Sage", hex: "#5E7F68" },
+  { name: "Pencil", hex: "#C08A2E" },
+  { name: "Terracotta", hex: "#B4593F" },
+  { name: "Paper", hex: "#F1EDE3" },
+];
+const palettes = BG_TARGETS.map((t) => {
+  const el = $(`pal-${t}`);
+  const buttons = KEY_PALETTE.map((c) => {
+    const b = document.createElement("button");
+    b.style.background = c.hex;
+    b.title = c.name;
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-label", c.name);
+    b.addEventListener("click", () => send("key-bg", `${t}=${c.hex === "#000000" ? "" : c.hex}`));
+    return b;
+  });
+  el.replaceChildren(...buttons);
+  return buttons;
+});
 const BOTTOM_NAMES = {
   meeting: ["Catch-up", "Save", "For me?"],
   education: ["Flashcard", "Quiz me", "Explain simply"],
@@ -233,6 +302,7 @@ function renderTransport(s: PanelSnapshotMsg): void {
   audioState = l.audio.state;
   audioStatusText = l.audio.text;
   renderAudioText();
+  meterEl.hidden = !listening; // the level meter only means something while listening
   learnedEl.hidden = l.learnedKeyterms.length === 0;
   learnedEl.textContent = `Learned: ${l.learnedKeyterms.join(", ")}`;
   learnedEl.title = "Added to speech-to-text keyterms at the next start";
@@ -244,7 +314,8 @@ function renderKeys(s: PanelSnapshotMsg): void {
     ...s.keys.map((k) => {
       const key = document.createElement("div");
       key.className = `key state-${k.state}`;
-      if (k.color && k.state !== "empty" && k.state !== "alert") key.style.setProperty("--cat", k.color);
+      // On a coloured key the category is drawn soft white / soft dark (custom-* classes), like the plugin.
+      if (k.color && !k.bg && k.state !== "empty" && k.state !== "alert") key.style.setProperty("--cat", k.color);
       if (k.bg && k.state !== "alert" && k.state !== "empty") {
         key.style.background = k.bg;
         key.classList.add(isLight(k.bg) ? "custom-dark" : "custom-light");
@@ -291,8 +362,24 @@ function renderStatusbar(s: PanelSnapshotMsg): void {
   setStatus(llmEl, "Model", s.llm.state === "ok" ? "ok" : s.llm.state === "error" ? "err" : "wait", s.llm.text);
   const f = s.focus;
   const cam = f.camera;
+  // MX Brio: plugged in (macOS) and tracking (Gaze Tracker).
+  const tracking = cam.state === "tracking";
+  const brioCls = !f.brio.checked ? "" : !f.brio.connected ? "err" : tracking ? "ok" : "wait";
+  brioStatus.className = `status-item status-btn ${brioCls}`;
+  brioStatus.title = !f.brio.checked
+    ? "Checking for the MX Brio…"
+    : !f.brio.connected
+      ? "MX Brio not found: plug it in (USB). Click for details."
+      : tracking
+        ? "MX Brio connected · Gaze Tracker tracking your gaze"
+        : `MX Brio connected · ${cam.text.replace(/^Camera: /, "")}. Click for details.`
+  if (s.mode === "mock") brioStatus.title += " (Mock mode does not use the camera: Demo → Simulate away)";
+  // Focus only when it means something: Live with a camera, or a simulated away.
+  focusEl.hidden = !(f.state === "away" || (s.mode === "live" && f.state === "focused"));
   if (f.state === "away") {
-    setStatus(focusEl, `Away ${fmt(f.forMs / 1000)}`, "away", `Away · ${AWAY_REASON[f.reason ?? ""] ?? ""}`);
+    setStatus(focusEl, `Away ${fmt(f.forMs / 1000)}${f.simulated ? " · simulated" : ""}`, "away", `Away · ${AWAY_REASON[f.reason ?? ""] ?? ""}`);
+  } else if (s.mode === "mock") {
+    setStatus(focusEl, "Camera · live only", "", "In Mock mode the camera is not used. Use Demo → Simulate away.");
   } else if (f.state === "focused") {
     setStatus(focusEl, "Focused", "ok", cam.text);
   } else {
@@ -305,6 +392,7 @@ function renderStatusbar(s: PanelSnapshotMsg): void {
 
 function renderSettings(s: PanelSnapshotMsg): void {
   document.documentElement.dataset.theme = s.settings.theme;
+  document.documentElement.dataset.usage = s.usage; // mode accent (panel.css)
   modeMockBtn.classList.toggle("active", s.mode === "mock");
   modeLiveBtn.classList.toggle("active", s.mode === "live");
   usageMeetingBtn.classList.toggle("active", s.usage === "meeting");
@@ -328,22 +416,30 @@ function renderSettings(s: PanelSnapshotMsg): void {
   scenarioEl.disabled = s.mode === "live";
   scenarioEl.title = s.mode === "live" ? "Scenarios are mock content: switch Source to Mock" : "Mock content for this mode";
   BG_TARGETS.forEach((t, i) => {
-    const input = bgInputs[i];
-    if (document.activeElement !== input) input.value = (s.settings.keyBg[t] ?? "#000000").toLowerCase();
+    const current = (s.settings.keyBg[t] ?? "#000000").toUpperCase();
+    palettes[i].forEach((b, j) => b.setAttribute("aria-checked", String(KEY_PALETTE[j].hex === current)));
+    $(`pal-${t}-choice`).textContent = KEY_PALETTE.find((c) => c.hex === current)?.name ?? "Custom";
     if (i > 0) {
       const name = BOTTOM_NAMES[s.usage][i - 1];
-      $(`bg-${t}-name`).textContent = name;
-      input.parentElement!.title = `Bottom ${["left", "middle", "right"][i - 1]} key: ${name}`;
+      const label = $(`bg-${t}-name`);
+      label.textContent = name;
+      label.title = `Bottom ${["left", "middle", "right"][i - 1]} key: ${name}`;
     }
   });
   const cam = s.focus.camera;
-  cameraText.textContent = cam.text.replace(/^Camera: /, "");
-  cameraText.className = `row-value${cam.state === "tracking" ? " ok" : ""}`;
+  const b = s.focus.brio;
+  brioText.textContent = !b.checked ? "Checking…" : b.connected ? "Connected" : "Not found: plug it in (USB)";
+  brioText.className = `row-value${!b.checked ? "" : b.connected ? " ok" : " err"}`;
+  const camText = cam.text.replace(/^Camera: /, "").replace(/^Gaze Tracker /, "");
+  cameraText.textContent = camText.charAt(0).toUpperCase() + camText.slice(1);
+  cameraText.className = `row-value${cam.state === "tracking" ? " ok" : cam.state === "off" || cam.state === "connecting" ? "" : " warn"}`;
   cameraError.hidden = !cam.advice;
   cameraError.textContent = cam.advice ?? "";
   calibrateBtn.disabled = cam.state === "off" || cam.state === "connecting" || cam.state === "no-tracker";
+  // Demo tools: Mock only.
+  simTools.hidden = s.mode !== "mock";
   simAway = s.focus.simulated;
-  simAwayBtn.textContent = simAway ? "Stop" : "Simulate away";
+  simAwayBtn.textContent = simAway ? "Back from away" : "Simulate away";
   simAwayBtn.classList.toggle("on", simAway);
   diagLlm.textContent = s.llm.text;
   diagLlm.className = s.llm.state === "error" ? "err" : "";
@@ -380,6 +476,7 @@ function kbd(text: string): HTMLElement {
 }
 
 function renderSnapshot(s: PanelSnapshotMsg): void {
+  syncClock(s);
   snap = s;
   mode = s.mode;
   playing = s.playback.playing;
@@ -391,6 +488,86 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
   renderNotices(s);
   renderStatusbar(s);
   renderEmpty();
+}
+
+// --- saved view -------------------------------------------------------------------------------------
+
+let saved: SavedMsg | null = null;
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function entryEls(s: SessionMsg): HTMLElement[] {
+  const ideas = s.ideas.map((i) => {
+    const box = el("article", "idea");
+    const head = el("div", "idea-head");
+    head.append(el("span", "idea-title", i.title), el("span", "t", fmt(i.t)));
+    box.append(head);
+    if (i.summary) box.append(el("p", "idea-summary", i.summary));
+    if (i.quote) box.append(el("p", "idea-quote", `“${i.quote}”`));
+    return box;
+  });
+  const cards = s.cards.map((c) => {
+    const box = el("article", "idea");
+    const head = el("div", "idea-head");
+    head.append(el("span", "idea-title", c.front), el("span", "t", fmt(c.t)));
+    box.append(head, el("p", "idea-back", c.back));
+    return box;
+  });
+  return [...ideas, ...cards];
+}
+
+function countLabel(s: SessionMsg): string {
+  const parts = [];
+  if (s.ideas.length) parts.push(`${s.ideas.length} idea${s.ideas.length > 1 ? "s" : ""}`);
+  if (s.cards.length) parts.push(`${s.cards.length} card${s.cards.length > 1 ? "s" : ""}`);
+  return parts.join(" · ");
+}
+
+function renderSaved(): void {
+  if (!saved) return;
+  const cur = saved.current;
+  const n = cur ? cur.ideas.length + cur.cards.length : 0;
+  savedCount.hidden = n === 0;
+  savedCount.textContent = String(n);
+  const isCourse = snap?.usage === "education";
+  const nodes: HTMLElement[] = [el("h3", "", isCourse ? "This course" : "This meeting")];
+  const title = cur?.title ?? (snap?.mode === "live" ? (isCourse ? "Live lecture" : "Live meeting") : (snap?.scenarios.find((x) => x.id === snap?.scenario)?.title ?? ""));
+  nodes.push(el("p", "saved-title", title));
+  if (cur && (cur.ideas.length || cur.cards.length)) {
+    nodes.push(el("p", "saved-meta", countLabel(cur)), ...entryEls(cur));
+  } else {
+    nodes.push(
+      el(
+        "p",
+        "saved-empty",
+        isCourse
+          ? "Nothing saved yet. Press Flashcard on the keypad to turn what was just taught into a card."
+          : "Nothing saved yet. Press Save on the keypad, then pick how far back to look.",
+      ),
+    );
+  }
+  const earlier = saved.sessions.filter((s) => s.id !== saved!.currentId && (s.ideas.length || s.cards.length));
+  if (earlier.length) {
+    nodes.push(el("h3", "", "Earlier"));
+    for (const s of earlier) {
+      const d = el("details", "past");
+      const sum = el("summary", "");
+      sum.append(el("span", "past-title", s.title), el("span", "past-count", countLabel(s)));
+      d.append(sum, ...entryEls(s));
+      nodes.push(d);
+    }
+  }
+  // Keep which earlier sessions were expanded.
+  const open = new Set([...savedBody.querySelectorAll("details[open] .past-title")].map((x) => x.textContent ?? ""));
+  savedBody.replaceChildren(...nodes);
+  savedBody.querySelectorAll("details").forEach((d) => {
+    if (open.has(d.querySelector(".past-title")?.textContent ?? "")) d.open = true;
+  });
 }
 
 // --- transcript -------------------------------------------------------------------------------------
@@ -450,6 +627,59 @@ function keepScrolled(fn: () => void): void {
   if (atBottom) transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
+// --- word-by-word reveal (mock): driven by the playback clock, so Pause and 2× apply -------------------
+
+/** Lines still being "spoken": shown up to the words whose start time has passed. */
+let revealing: { p: HTMLElement; l: PanelLineMsg; shown: number }[] = [];
+let clockPos = 0;
+let clockAt = 0;
+let clockSpeed = 1;
+let clockPlaying = false;
+let initialLoad = true;
+
+function playbackPos(): number {
+  return clockPlaying ? clockPos + ((performance.now() - clockAt) / 1000) * clockSpeed : clockPos;
+}
+
+function syncClock(s: PanelSnapshotMsg): void {
+  if (s.mode !== "mock") {
+    finishReveal();
+    return;
+  }
+  clockPos = s.playback.position;
+  clockAt = performance.now();
+  clockSpeed = s.playback.speed;
+  clockPlaying = s.playback.playing;
+}
+
+function renderPartial(r: { p: HTMLElement; l: PanelLineMsg; shown: number }, n: number): void {
+  const words = r.l.text.split(/\s+/).filter(Boolean);
+  r.shown = n;
+  r.p.replaceChildren();
+  appendHighlighted(r.p, words.slice(0, n).join(" "), r.l.terms);
+  r.p.classList.toggle("typing", n < words.length);
+}
+
+function tickReveal(): void {
+  if (!revealing.length) return;
+  const pos = playbackPos();
+  keepScrolled(() => {
+    revealing = revealing.filter((r) => {
+      const times = r.l.words!;
+      let n = 0;
+      while (n < times.length && times[n] <= pos + 0.02) n++;
+      if (n !== r.shown) renderPartial(r, n);
+      return n < times.length;
+    });
+  });
+}
+
+function finishReveal(): void {
+  for (const r of revealing) renderPartial(r, r.l.words!.length);
+  revealing = [];
+}
+setInterval(tickReveal, 60);
+
 function addLine(l: PanelLineMsg): void {
   keepScrolled(() => {
     const speaker = l.speaker ?? "";
@@ -459,7 +689,20 @@ function addLine(l: PanelLineMsg): void {
       else transcriptEl.append(turn);
       lastTurn = { el: turn, speaker };
     }
-    lastTurn.el.append(lineEl(l.text, l.terms, l.t));
+    const p = lineEl(l.text, l.terms, l.t);
+    lastTurn.el.append(p);
+    // A line arriving now (not history) with word times is revealed word by word.
+    if (l.words && l.words.length && snap?.mode === "mock" && !initialLoad) {
+      finishReveal(); // a new line: the previous one is complete
+      if (playbackPos() < l.t) {
+        clockPos = l.t;
+        clockAt = performance.now();
+      }
+      const r = { p, l, shown: -1 };
+      revealing.push(r);
+      renderPartial(r, 0);
+      tickReveal();
+    }
   });
   emptyEl.hidden = true;
 }
@@ -501,11 +744,22 @@ function togglePlayback(): void {
 }
 
 const settingsOpen = () => !settingsEl.hidden;
+const savedOpen = () => !savedEl.hidden;
 
+/** One sheet at a time: Settings or Saved. */
 function setSettingsOpen(open: boolean): void {
+  if (open) setSavedOpen(false);
   settingsEl.hidden = !open;
   settingsBtn.classList.toggle("on", open);
   settingsBtn.setAttribute("aria-expanded", String(open));
+}
+
+function setSavedOpen(open: boolean): void {
+  if (open) setSettingsOpen(false);
+  savedEl.hidden = !open;
+  savedBtn.classList.toggle("on", open);
+  savedBtn.setAttribute("aria-expanded", String(open));
+  if (open) renderSaved();
 }
 
 playBtn.addEventListener("click", () => send(playing ? "pause" : "play"));
@@ -522,6 +776,7 @@ keytermsEl.addEventListener("keydown", (e) => {
 });
 exportBtn.addEventListener("click", () => send("export"));
 settingsBtn.addEventListener("click", () => setSettingsOpen(!settingsOpen()));
+savedBtn.addEventListener("click", () => setSavedOpen(!savedOpen()));
 
 modeMockBtn.addEventListener("click", () => send("mode-mock"));
 modeLiveBtn.addEventListener("click", () => send("mode-live"));
@@ -531,29 +786,28 @@ scenarioEl.addEventListener("change", () => send("scenario", scenarioEl.value));
 themeDarkBtn.addEventListener("click", () => send("theme-dark"));
 themeLightBtn.addEventListener("click", () => send("theme-light"));
 bgResetBtn.addEventListener("click", () => send("key-bg-reset"));
-// Colour pickers fire `input` continuously while dragging: send at most every 150 ms (the keypad redraws each time).
-const bgTimers = new Map<string, number>();
-BG_TARGETS.forEach((t, i) =>
-  bgInputs[i].addEventListener("input", () => {
-    clearTimeout(bgTimers.get(t));
-    bgTimers.set(t, window.setTimeout(() => send("key-bg", `${t}=${bgInputs[i].value}`), 150));
-  }),
-);
 calibrateBtn.addEventListener("click", () => send("gaze-calibrate"));
+openGazeBtn.addEventListener("click", () => send("open-gaze-tracker"));
+brioStatus.addEventListener("click", () => {
+  setSettingsOpen(true);
+  $("camera-section").scrollIntoView({ block: "start", behavior: "smooth" });
+});
 simAwayBtn.addEventListener("click", () => send("sim-away", simAway ? "off" : "on"));
 simMentionBtn.addEventListener("click", () => send("sim-mention"));
 
 // Keyboard: Space plays / listens, ⌘1 / ⌘2 mode, ⌘L source, ⌘E export, ⌘, settings, Esc closes settings.
 document.addEventListener("keydown", (e) => {
   const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
-  if (e.key === "Escape" && settingsOpen()) {
+  if (e.key === "Escape" && (settingsOpen() || savedOpen())) {
     setSettingsOpen(false);
+    setSavedOpen(false);
     e.preventDefault();
     return;
   }
   if (e.metaKey && !e.altKey && !e.ctrlKey) {
     const k = e.key.toLowerCase();
     if (k === ",") setSettingsOpen(!settingsOpen());
+    else if (k === "s") setSavedOpen(!savedOpen());
     else if (k === "e") send("export");
     else if (k === "l") send(mode === "mock" ? "mode-live" : "mode-mock");
     else if (k === "1") send("usage-meeting");
@@ -572,17 +826,25 @@ document.addEventListener("keydown", (e) => {
 window.keypad.on("snapshot", renderSnapshot);
 window.keypad.on("line", addLine);
 window.keypad.on("reset", () => {
+  revealing = [];
   interimEl = null;
   lastTurn = null;
   transcriptEl.replaceChildren(emptyEl);
   renderEmpty();
 });
 window.keypad.on("interim", setInterim);
+window.keypad.on("saved", (s: SavedMsg) => {
+  saved = s;
+  renderSaved();
+});
 window.keypad.on("level", setLevel);
 setInterval(renderAudioText, 500); // "Receiving audio" fades back when the level drops
 
-void window.keypad.init().then(({ snapshot, lines, listener }) => {
+void window.keypad.init().then(({ snapshot, lines, listener, saved: s }) => {
+  saved = s;
   if (listener) listenerRe = new RegExp(`\\b${listener.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
   lines.forEach(addLine);
+  initialLoad = false;
   renderSnapshot(snapshot);
+  renderSaved();
 });

@@ -37,8 +37,10 @@ export interface FocusTrackerOptions {
   awayAfterMs?: number;
   /** Looking back this long counts as back. */
   backAfterMs?: number;
-  /** Majority vote over the last N samples (gaze is noisy). */
+  /** Majority vote over the last N samples (gaze is noisy) to decide "away". */
   smoothSamples?: number;
+  /** This many consecutive "looking" samples bring you back at once (face detection drops frames). */
+  backSamples?: number;
 }
 
 /**
@@ -52,6 +54,7 @@ export class FocusTracker extends EventEmitter {
   private readonly awayAfterMs: number;
   private readonly backAfterMs: number;
   private readonly smoothSamples: number;
+  private readonly backSamples: number;
 
   private camera: FocusState = "off";
   private cameraReason: AwayReason | undefined;
@@ -70,6 +73,7 @@ export class FocusTracker extends EventEmitter {
     this.awayAfterMs = opts.awayAfterMs ?? 2500;
     this.backAfterMs = opts.backAfterMs ?? 800;
     this.smoothSamples = opts.smoothSamples ?? 5;
+    this.backSamples = opts.backSamples ?? 2;
     this.status_ = { state: "off", since: this.clock.now(), simulated: false };
   }
 
@@ -94,11 +98,18 @@ export class FocusTracker extends EventEmitter {
     if (this.camera === "off") this.setCamera("focused", now);
     if (this.camera === "focused" && this.raw.away && now - this.raw.at >= this.awayAfterMs) {
       this.setCamera("away", this.raw.at, this.raw.meeting);
-    } else if (this.camera === "away" && !this.raw.away && now - this.raw.at >= this.backAfterMs) {
+    } else if (this.camera === "away" && ((!this.raw.away && now - this.raw.at >= this.backAfterMs) || this.lookingStreak())) {
+      // Back quickly: a short streak of good frames is enough, even when face detection drops many frames.
       this.setCamera("focused", now);
     } else {
       this.update(); // reason may have changed (off-screen <-> no face)
     }
+  }
+
+  /** The last `backSamples` samples all show you looking at the screen. */
+  private lookingStreak(): boolean {
+    const tail = this.recent.slice(-this.backSamples);
+    return tail.length === this.backSamples && tail.every((r) => !r.away);
   }
 
   /** The camera source stopped (false) or (re)started (true). */

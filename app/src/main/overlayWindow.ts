@@ -10,6 +10,8 @@ export interface OverlayWindowOptions {
   appRoot: string;
   /** Called once the card with this id has been painted on screen. */
   onShown: (id: number) => void;
+  /** The card's × was clicked. */
+  onClose: () => void;
   log: (msg: string) => void;
 }
 
@@ -60,11 +62,14 @@ export class OverlayWindow {
     });
     this.win.setAlwaysOnTop(true, "screen-saver");
     this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-    this.win.setIgnoreMouseEvents(true);
+    // Click-through, except the ×: mouse moves are forwarded so the page can ask for clicks while over it.
+    this.win.setIgnoreMouseEvents(true, { forward: true });
     if (isMac) this.win.setHiddenInMissionControl(true);
 
     ipcMain.on("overlay:size", this.onSize);
     ipcMain.on("overlay:shown", this.onShownMsg);
+    ipcMain.on("overlay:interactive", this.onInteractive);
+    ipcMain.on("overlay:close", this.onCloseMsg);
     this.win.webContents.once("did-finish-load", () => {
       this.loaded = true;
       this.win.webContents.send("overlay:theme", this.theme);
@@ -105,6 +110,7 @@ export class OverlayWindow {
   }
 
   hide(): void {
+    if (!this.win.isDestroyed()) this.win.setIgnoreMouseEvents(true, { forward: true });
     this.pending = null;
     this.currentId = null;
     this.revealedId = null;
@@ -121,6 +127,8 @@ export class OverlayWindow {
     this.cancelHide();
     ipcMain.off("overlay:size", this.onSize);
     ipcMain.off("overlay:shown", this.onShownMsg);
+    ipcMain.off("overlay:interactive", this.onInteractive);
+    ipcMain.off("overlay:close", this.onCloseMsg);
     if (!this.win.isDestroyed()) this.win.destroy();
   }
 
@@ -129,8 +137,10 @@ export class OverlayWindow {
     const { workArea } = screen.getPrimaryDisplay();
     const height = Math.min(Math.ceil(msg.height), workArea.height - 2 * OVERLAY_MARGIN);
     this.win.setBounds({
-      x: workArea.x + workArea.width - OVERLAY_WIDTH - OVERLAY_MARGIN,
-      y: workArea.y + OVERLAY_MARGIN,
+      // Bottom-left corner, clear of the meeting's video and of the companion window; a card that grows
+      // while text streams in keeps its bottom edge and extends upwards.
+      x: workArea.x + OVERLAY_MARGIN,
+      y: workArea.y + workArea.height - height - OVERLAY_MARGIN,
       width: OVERLAY_WIDTH,
       height,
     });
@@ -138,6 +148,18 @@ export class OverlayWindow {
     this.revealedId = msg.id;
     if (!this.win.isVisible()) this.win.showInactive();
     this.win.webContents.send("overlay:reveal", msg.id);
+  };
+
+  /** Pointer over the × (true) or not (false): only then does the card take clicks. */
+  private readonly onInteractive = (e: Electron.IpcMainEvent, on: boolean): void => {
+    if (e.sender !== this.win.webContents || this.win.isDestroyed()) return;
+    this.win.setIgnoreMouseEvents(!on, { forward: true });
+  };
+
+  private readonly onCloseMsg = (e: Electron.IpcMainEvent): void => {
+    if (e.sender !== this.win.webContents) return;
+    this.win.setIgnoreMouseEvents(true, { forward: true });
+    this.opts.onClose();
   };
 
   private readonly onShownMsg = (e: Electron.IpcMainEvent, id: number): void => {

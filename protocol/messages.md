@@ -31,6 +31,13 @@
 { "type": "press", "slot": 3, "ts": 1795288400000 }
 ```
 
+`nav` – the plugin's **Back** (`"left"`) or **Forward** (`"right"`) action ran. In Options+ these actions can be put
+on the keypad's two arrow buttons below the LCD keys (if Options+ allows it there) or on any other control.
+The app uses `left` to leave a key menu; `right` is reserved.
+```json
+{ "type": "nav", "dir": "left", "ts": 1795288400000 }
+```
+
 ## App → plugin
 
 `keys` – key states. Right after `hello`, the app sends all 9 slots; afterwards only the slots that changed.
@@ -51,7 +58,7 @@
 | `label` | string | yes      | the **full** term (≤ 40 chars, ≤ 4 words) or action name, `""` = blank. The plugin breaks it into lines and fits it (see below); the app never shortens it. |
 | `sub`   | string | no       | category name (term keys only), drawn in small capitals at the top           |
 | `color` | string | no       | `#RRGGBB`. Term keys: category colour (category text, "new" border). Keys without `sub`: label colour (default white) |
-| `bg`    | string | no       | `#RRGGBB` key background, default black (user setting in the app panel). Ignored in `empty` (always black) and `alert` (`color` is the background). On a light `bg` (luminance > 0.55) the plugin draws the white texts (term, default action label) near-black `#111111` and the "seen" grey darker, so they stay readable |
+| `bg`    | string | no       | `#RRGGBB` key background, default black (user setting in the app panel). Ignored in `empty` (always black) and `alert` (`color` is the background). On a light `bg` (luminance > 0.55) the plugin draws the white texts (term, default action label) near-black `#111111`. On any `bg` the category is drawn soft white (soft dark on light keys) instead of its colour, and a "seen" label fades towards the key colour, so both stay readable. The app offers named presets (Ink, Focus, Indigo, Teal, Chalkboard, Sage, Pencil, Terracotta, Paper) |
 | `state` | string | yes      | see below                                                                     |
 
 ### Drawing (the plugin does the layout)
@@ -93,6 +100,21 @@ A press within 500 ms after a shift goes to the term that was on that key before
   then their normal state, alternating every 500 ms. It stops when you look back or press any key;
   that press only stops the pulse and shows the "For me?" card, it does not trigger the key's own action.
   Slot 8 keeps its own pulse underneath and resumes it when the all-keys pulse stops.
+
+## Key menus (app side, Meeting mode)
+Pressing **Catch-up** (slot 6) or **Save** (slot 7) opens a duration menu on the keypad instead of acting at once.
+The app simply sends other key states; the plugin needs nothing special:
+
+| slot | key state |
+|------|-----------|
+| 0–4  | `{ "label": "30 s" \| "1 min" \| "2 min" \| "5 min" \| "10 min", "sub": "Catch-up" \| "Save", "color": "#58A6FF", "state": "shown" }` |
+| 6    | `{ "label": "‹ Back", "color": "#8B949E", "state": "shown" }` |
+| 5, 7, 8 | `empty` |
+
+A duration press runs Catch-up / Save over that many seconds and returns to the normal keys; so do slot 6, a `nav`
+`left`, or 15 s without a press. Terms keep arriving underneath and reappear when the menu closes. Catch-up skips the
+menu when it shows `Missed …` (it summarises the missed span directly), while it is busy, or when its card is visible
+(the press hides it).
 
 ## Education mode (app setting)
 The app has two layouts. Meeting (default): 6 Catch-up · 7 Save · 8 For me?. Education:

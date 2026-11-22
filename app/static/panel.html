@@ -14,6 +14,10 @@
         <span id="state-dot" class="state-dot" aria-hidden="true"></span>
       </div>
       <span id="time" class="time">0:00</span>
+      <button id="saved-btn" class="icon-btn badge-host" title="Saved ideas for this meeting or course (⌘S)" aria-label="Saved" aria-expanded="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7c.28 0 .5.22.5.5v10.2a.3.3 0 0 1-.48.24L8 11l-3.52 2.44a.3.3 0 0 1-.48-.24V3c0-.28.22-.5.5-.5Z" /></svg>
+        <span id="saved-count" class="badge" hidden></span>
+      </button>
       <button id="export" class="icon-btn" title="Export meeting notes (⌘E)" aria-label="Export meeting notes">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M5.25 5.25 8 2.5l2.75 2.75M3.5 9v3.25c0 .55.45 1 1 1h7c.55 0 1-.45 1-1V9" /></svg>
       </button>
@@ -21,6 +25,11 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h5M10.5 4.5h3M2.5 11.5h2M7.5 11.5h6" /><circle cx="9" cy="4.5" r="1.5" /><circle cx="6" cy="11.5" r="1.5" /></svg>
       </button>
     </header>
+
+    <!-- Mode: decides what the bottom row of keys does. -->
+    <div class="segmented mode-switch" role="group" aria-label="Mode">
+      <button id="usage-meeting" class="active" title="Meeting: Catch-up · Save · For me? (⌘1)">Meeting</button><button id="usage-education" title="Education: Flashcard · Quiz me · Explain simply (⌘2)">Education</button>
+    </div>
 
     <!-- Transport: mock playback or live listening. -->
     <section id="mock-controls" class="transport">
@@ -42,8 +51,8 @@
       <button id="listen" class="listen-btn" title="Start listening (Space)">
         <span class="rec" aria-hidden="true"></span><span id="listen-label">Listen</span>
       </button>
-      <input id="keyterms" type="text" placeholder="Topic or keyterms" spellcheck="false" title="Helps speech-to-text with names and jargon. Used at the next start." />
-      <div class="meter" title="System audio level"><div id="meter-fill"></div></div>
+      <input id="keyterms" type="text" placeholder="Topic, names, jargon…" spellcheck="false" title="Words you expect to hear (meeting topic, people's names, product names, jargon), comma-separated. Speech-to-text then spells them right. Your name is always included. Used at the next Listen." />
+      <div id="meter" class="meter" title="System audio level" hidden><div id="meter-fill"></div></div>
     </section>
     <div id="live-hint" class="hint" hidden>
       <span id="audio-text">Audio off</span>
@@ -52,10 +61,6 @@
 
     <!-- Keypad mirror: what the 9 physical keys show right now. -->
     <section class="keys">
-      <!-- Mode: decides what the bottom row of keys does. -->
-      <div class="segmented mode-switch" role="group" aria-label="Mode">
-        <button id="usage-meeting" class="active" title="Meeting: Catch-up · Save · For me? (⌘1)">Meeting</button><button id="usage-education" title="Education: Flashcard · Quiz me · Explain simply (⌘2)">Education</button>
-      </div>
       <div id="grid" class="grid" aria-label="Keypad"></div>
       <div id="queue" class="queue"></div>
     </section>
@@ -72,13 +77,26 @@
       <div id="empty" class="empty"><span>Press <kbd>Space</kbd> to play the mock meeting.</span></div>
     </main>
 
+    <!-- Demo tools, Mock only: quiet text buttons, out of the way at the bottom. -->
+    <div id="sim-tools" class="sim-tools">
+      <span class="sim-label">Demo</span>
+      <button id="sim-away" class="sim-btn" title="Pretend you looked away (as if the camera saw it)">Simulate away</button>
+      <button id="sim-mention" class="sim-btn" title="A line asking you a question goes through the real For-me check (one model call)">Simulate a question for me</button>
+    </div>
+
     <!-- One-line status. Details are in Settings → Diagnostics and in the tooltips. -->
     <footer class="statusbar">
       <span id="plugin" class="status-item" title="Logitech MX Keypad plugin">Keypad</span>
       <span id="llm" class="status-item" title="Model">Model</span>
-      <span id="focus-pill" class="status-item" title="Camera focus (Logi Gaze Tracker)">Camera</span>
+      <button id="brio-status" class="status-item status-btn" title="Logitech MX Brio and Logi Gaze Tracker: click for details">MX Brio</button>
+      <span id="focus-pill" class="status-item" title="Camera focus (Logi Gaze Tracker)" hidden>Focused</span>
       <span id="export-text" class="status-note"></span>
     </footer>
+
+    <!-- Saved sheet (⌘S): what was saved in this meeting or course, then earlier sessions. -->
+    <aside id="saved" class="sheet" hidden aria-label="Saved">
+      <div id="saved-body" class="sheet-body"></div>
+    </aside>
 
     <!-- Settings sheet (⌘,): configuration, camera, testing tools, diagnostics. -->
     <aside id="settings" class="sheet" hidden aria-label="Settings">
@@ -102,32 +120,29 @@
             <button id="theme-dark" class="active">Dark</button><button id="theme-light">Light</button>
           </div>
         </div>
-        <div class="row top">
+        <div class="palette-head">
           <span class="row-label">Keypad colours</span>
-          <div class="swatches">
-            <label class="swatch" title="Term keys (1–6)"><input id="bg-terms" type="color" value="#000000" /><span>Terms</span></label>
-            <label class="swatch"><input id="bg-6" type="color" value="#000000" /><span id="bg-6-name">Left</span></label>
-            <label class="swatch"><input id="bg-7" type="color" value="#000000" /><span id="bg-7-name">Middle</span></label>
-            <label class="swatch"><input id="bg-8" type="color" value="#000000" /><span id="bg-8-name">Right</span></label>
-          </div>
+          <button id="bg-reset" class="text-btn">Reset to black</button>
         </div>
-        <div class="row end"><button id="bg-reset" class="text-btn">Reset to black</button></div>
+        <!-- One preset palette per key group (built in panel.ts). -->
+        <div class="palette-row"><span class="palette-name">Terms<small id="pal-terms-choice"></small></span><div class="palette" id="pal-terms" role="radiogroup" aria-label="Term keys colour"></div></div>
+        <div class="palette-row"><span class="palette-name"><span id="bg-6-name">Left</span><small id="pal-6-choice"></small></span><div class="palette" id="pal-6" role="radiogroup"></div></div>
+        <div class="palette-row"><span class="palette-name"><span id="bg-7-name">Middle</span><small id="pal-7-choice"></small></span><div class="palette" id="pal-7" role="radiogroup"></div></div>
+        <div class="palette-row"><span class="palette-name"><span id="bg-8-name">Right</span><small id="pal-8-choice"></small></span><div class="palette" id="pal-8" role="radiogroup"></div></div>
 
-        <h3>Camera</h3>
+        <h3 id="camera-section">Camera</h3>
         <div class="row">
-          <span id="camera-text" class="row-value">Camera off</span>
-          <button id="gaze-calibrate" class="btn">Calibrate</button>
+          <span class="row-label">MX Brio</span>
+          <span id="brio-text" class="row-value">Checking…</span>
+        </div>
+        <div class="row">
+          <span class="row-label">Gaze Tracker</span>
+          <span id="camera-text" class="row-value">Off</span>
         </div>
         <p id="camera-error" class="row-note" hidden></p>
-
-        <h3>Testing</h3>
-        <div class="row">
-          <span class="row-label">Pretend you looked away</span>
-          <button id="sim-away" class="btn">Simulate away</button>
-        </div>
-        <div class="row">
-          <span class="row-label">A question for you</span>
-          <button id="sim-mention" class="btn" title="Sends a line naming you through the real For-me check (one model call)">Simulate</button>
+        <div class="row end gap">
+          <button id="open-gaze" class="btn" title="Opens the Logi Gaze Tracker: pick the MX Brio in its Setup tab">Choose camera…</button>
+          <button id="gaze-calibrate" class="btn">Calibrate</button>
         </div>
 
         <h3>Diagnostics</h3>
@@ -142,6 +157,7 @@
           <dt><kbd>Space</kbd></dt><dd>Play / pause, or listen / stop</dd>
           <dt><kbd>⌘</kbd><kbd>1</kbd> <kbd>⌘</kbd><kbd>2</kbd></dt><dd>Meeting / Education</dd>
           <dt><kbd>⌘</kbd><kbd>L</kbd></dt><dd>Switch Mock / Live</dd>
+          <dt><kbd>⌘</kbd><kbd>S</kbd></dt><dd>Saved ideas for this meeting or course</dd>
           <dt><kbd>⌘</kbd><kbd>E</kbd></dt><dd>Export meeting notes</dd>
           <dt><kbd>⌘</kbd><kbd>,</kbd></dt><dd>Settings</dd>
         </dl>

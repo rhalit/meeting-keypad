@@ -1,9 +1,11 @@
 [
-  { "id": "sprint", "title": "Product sprint review (AI search launch)", "usage": "meeting", "path": "." },
-  { "id": "ai-platform", "title": "AI platform sync (assistant, costs, safety)", "usage": "meeting", "path": "scenarios/ai-platform" },
-  { "id": "business-review", "title": "Quarterly business review", "usage": "meeting", "path": "scenarios/business-review" },
-  { "id": "onboarding", "title": "New employee onboarding", "usage": "meeting", "path": "scenarios/onboarding" },
-  { "id": "lecture", "title": "Learning sciences: how the brain learns", "usage": "education", "path": "scenarios/lecture" },
-  { "id": "ml-class", "title": "Intro to machine learning", "usage": "education", "path": "scenarios/ml-class" },
-  { "id": "climate", "title": "Climate science 101", "usage": "education", "path": "scenarios/climate" }
+  {"id": "zoom-business", "title": "Zoom call: business update (video)", "usage": "meeting", "path": "scenarios/zoom-business", "video": "video.mp4", "duration": 29.4},
+  {"id": "sprint", "title": "Product sprint review (AI search launch)", "usage": "meeting", "path": "."},
+  {"id": "ai-platform", "title": "AI platform sync (assistant, costs, safety)", "usage": "meeting", "path": "scenarios/ai-platform"},
+  {"id": "business-review", "title": "Quarterly business review", "usage": "meeting", "path": "scenarios/business-review"},
+  {"id": "onboarding", "title": "New employee onboarding", "usage": "meeting", "path": "scenarios/onboarding"},
+  {"id": "nn-lecture", "title": "MIT 6.S191: deep learning recap (video)", "usage": "education", "path": "scenarios/nn-lecture", "video": "video.mp4", "duration": 24.1},
+  {"id": "lecture", "title": "Learning sciences: how the brain learns", "usage": "education", "path": "scenarios/lecture"},
+  {"id": "ml-class", "title": "Intro to machine learning", "usage": "education", "path": "scenarios/ml-class"},
+  {"id": "climate", "title": "Climate science 101", "usage": "education", "path": "scenarios/climate"}
 ]

@@ -80,6 +80,21 @@ namespace Loupedeck.MeetingKeysPlugin
             _ = this.SendAsync(socket, json, CancellationToken.None);
         }
 
+        // The Back / Forward actions (e.g. on the keypad's arrow buttons): {"type":"nav","dir":"left"|"right"}.
+        public void TrySendNav(String dir)
+        {
+            var socket = this._socket;
+            if (socket == null || socket.State != WebSocketState.Open)
+            {
+                PluginLog.Info($"Nav {dir} dropped: not connected");
+                return;
+            }
+
+            var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var json = $"{{\"type\":\"nav\",\"dir\":\"{dir}\",\"ts\":{ts}}}";
+            _ = this.SendAsync(socket, json, CancellationToken.None);
+        }
+
         private async Task RunLoopAsync(CancellationToken ct)
         {
             var failureLogged = false;

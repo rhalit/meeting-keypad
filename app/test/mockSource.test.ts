@@ -43,10 +43,26 @@ describe("MockSource", () => {
     expect(lines).toEqual([0]);
     clock.advance(1);
     expect(lines).toEqual([0, 10]);
+    // "LoRA and RAG": LoRA is word 1 (said at once), RAG word 3 (two words later at the mock pace, 0.33 s each).
+    expect(terms).toEqual([{ term: "LoRA", category: "Tech", source: "mock" }]);
+    clock.advance(660);
     expect(terms).toEqual([
       { term: "LoRA", category: "Tech", source: "mock" },
       { term: "RAG", category: "Tech", source: "mock" },
     ]);
+  });
+
+  it("emits each line with its word times: recorded ones, or an even pace that ends before the next line", () => {
+    const seen: number[][] = [];
+    src.on("line", (l: { wordTimes: number[] }) => seen.push(l.wordTimes));
+    src.play();
+    clock.advance(10 * S);
+    expect(seen[1]).toEqual([10, 10.33, 10.66]);
+    const rec = new MockSource([{ t: 2, speaker: "CEO", text: "Quick sync now", terms: [], wordStarts: [2, 2.5, 3.1] }], {}, new FakeClock());
+    const got: number[][] = [];
+    rec.on("line", (l: { wordTimes: number[] }) => got.push(l.wordTimes));
+    rec.play();
+    expect(got).toEqual([]); // not yet at 2 s
   });
 
   it("emits line before its terms, and unknownTerm for glossary misses", () => {
@@ -114,5 +130,22 @@ describe("MockSource", () => {
     src.play();
     expect(src.state().playing).toBe(true);
     expect(lines.at(-1)).toBe(0);
+  });
+
+  it("with an end time (video scenario) keeps playing after the last line, then ends", () => {
+    const clock2 = new FakeClock();
+    const src = new MockSource([{ t: 1, speaker: "CEO", text: "Quick sync.", terms: [] }], {}, clock2, 5);
+    let ended = 0;
+    src.on("end", () => ended++);
+    expect(src.duration()).toBe(5);
+    src.play();
+    clock2.advance(2000);
+    expect(src.state()).toMatchObject({ playing: true, ended: false });
+    src.pause();
+    src.play(); // paused in the tail: resumes, does not restart
+    expect(src.position()).toBeCloseTo(2, 1);
+    clock2.advance(3100);
+    expect(ended).toBe(1);
+    expect(src.state()).toMatchObject({ playing: false, ended: true, position: 5 });
   });
 });

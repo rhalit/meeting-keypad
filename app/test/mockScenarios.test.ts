@@ -39,8 +39,35 @@ describe("mock/scenarios", () => {
       const raw = JSON.parse(readFileSync(join(dir, "meeting.json"), "utf8")) as { t: number; speaker: string; text: string; terms: string[] }[];
       const glossary = JSON.parse(readFileSync(join(dir, "glossary.json"), "utf8")) as Record<string, any>;
       const termLines = raw.flatMap((l) => l.terms.map((term) => ({ term, t: l.t })));
+      // A recorded call (index "video"): real speech, so its own size rules; the keys queue a burst of terms anyway.
+      const info = loadScenarioIndex(join(SCENARIOS, "index.json")).find((x) => x.path === `scenarios/${name}`);
+      const video = info?.video !== undefined;
 
-      it("loads, is sorted, 3 speakers, 2-6 minutes, 10+ terms", () => {
+      if (video) {
+        it("video scenario: the video exists, every line falls inside it, 5+ terms, sorted", () => {
+          const { listenerName } = loadConfig(join(MOCK, "config.json"));
+          expect(() => loadMeeting(join(dir, "meeting.json"), listenerName)).not.toThrow();
+          // A third-party clip may be kept out of git (.gitignore); the app then plays the scenario without it.
+          if (!existsSync(join(dir, info!.video!))) expect(readFileSync(join(MOCK, "..", ".gitignore"), "utf8")).toContain(`mock/scenarios/${name}/${info!.video}`);
+          const ts = raw.map((l) => l.t);
+          expect(ts).toEqual([...ts].sort((a, b) => a - b));
+          expect(info!.duration, "duration (the video length)").toBeGreaterThan(Math.max(...ts));
+          expect(termLines.length).toBeGreaterThanOrEqual(5);
+        });
+
+        it("video scenario: every line has one time per word, rising, inside the line", () => {
+          raw.forEach((l, i) => {
+            const words = (l as { words?: number[] }).words;
+            expect(words, `line ${i} has word times`).toBeDefined();
+            expect(words!.length).toBe(l.text.split(/\s+/).filter(Boolean).length);
+            expect(words).toEqual([...words!].sort((a, b) => a - b));
+            expect(words![0]).toBeGreaterThanOrEqual(l.t);
+            if (raw[i + 1]) expect(words![words!.length - 1]).toBeLessThan(raw[i + 1].t);
+          });
+        });
+      }
+
+      it.skipIf(video)("loads, is sorted, 3 speakers, 2-6 minutes, 10+ terms", () => {
         const { listenerName } = loadConfig(join(MOCK, "config.json"));
         expect(() => loadMeeting(join(dir, "meeting.json"), listenerName)).not.toThrow();
         expect(() => loadGlossary(join(dir, "glossary.json"))).not.toThrow();
@@ -61,6 +88,7 @@ describe("mock/scenarios", () => {
             for (const earlier of raw.slice(0, i)) expect(mentions(earlier.text, term), `"${term}" spoken earlier`).toBe(false);
           }
         });
+        if (video) return; // real speech can be dense; SlotManager places at most 2 terms per 10 s
         const ts = termLines.map((x) => x.t);
         for (const t of ts) expect(ts.filter((u) => u >= t && u < t + 10).length).toBeLessThanOrEqual(2);
       });
@@ -68,7 +96,7 @@ describe("mock/scenarios", () => {
       it("asks the listener 2 direct questions, and only those lines name the listener", () => {
         const { listenerName, listenerAliases } = loadConfig(join(MOCK, "config.json"));
         const addressed = raw.filter((l) => l.text.includes(LISTENER_PLACEHOLDER));
-        expect(addressed).toHaveLength(2);
+        if (!video) expect(addressed).toHaveLength(2); // a recorded call or lecture may not address the listener
         for (const l of addressed) {
           expect(l.text.startsWith(`${LISTENER_PLACEHOLDER},`)).toBe(true);
           expect(l.text.trim().endsWith("?")).toBe(true);

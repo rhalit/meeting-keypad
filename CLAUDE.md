@@ -33,7 +33,7 @@ Phase 2b is done: a term key opens the overlay card (`app/src/pipeline/overlay.t
 `app/src/main/overlayWindow.ts` draws) with explanations from `mock/glossary.json`.
 Phase 2c: Catch-up (slot 6) and Save (slot 7) work on the mock meeting through an
 OpenAI-compatible LLM (`app/src/pipeline/llm.ts`, controllers `catchUp.ts` / `save.ts`).
-Save appends to `output/saved-ideas.md` (gitignored).
+Save keeps ideas in the app, not a file: the toolbar's Saved view (⌘S, `sessions.ts`, userData `sessions.json`) lists them per meeting or course (one session per mock scenario, one per Live listening session; Education shows its flashcards there too). `SaveController` takes `onSaved`; its `file` is optional (only the smoke script writes Markdown).
 Phase 3a: live transcript. The panel has a Mock / Live switch. In Live mode, `LiveSource`
 (`app/src/pipeline/liveSource.ts`) runs audiotee (`audioCapture.ts`, system audio, 16 kHz PCM)
 into Deepgram nova-3 (`stt.ts`). Final utterances become TranscriptBuffer lines `{t, speaker?, text}`,
@@ -74,6 +74,19 @@ Export ⌘E, Settings ⌘,), transport (mock: play / restart / progress / speed;
 keypad mirror, notices only when needed, the transcript grouped by speaker (lines naming the listener get an accent
 rule), a one-line status bar (Keypad · Model · Camera). Shortcuts: Space play / listen, ⌘1 / ⌘2 mode, ⌘L Mock / Live.
 One accent (#2B9BFF); red only for listening and alerts; hairline separators, no cards.
+Pop-up cards (overlay) sit in the bottom-left corner of the screen (`overlayWindow.ts`), growing upwards.
+Video scenarios: an index entry with `video` (file in the scenario folder) and `duration` plays in its own window
+(`videoWindow.ts`, top-left; IntelliPad docks at the right) in step with the mock playback. `zoom-business`:
+a 29 s Zoom call (HeyGen avatar), transcript from Deepgram + the script, 8 terms, "Alex, can you own the KYC fix
+by Friday?". The original recording `source.mov` is gitignored; `video.mp4` (1.9 MB) is the compressed copy.
+`nn-lecture` (Education default): a 24 s recap from MIT 6.S191 (perceptron, layers, loss function, gradient descent,
+backpropagation; 7 terms). Third-party clip: its `video.mp4` is gitignored (local only); without it the app plays the
+scenario as text and logs that the video is missing.
+Key menus (`keypadMenu.ts`, Meeting mode): Catch-up / Save open a duration menu on the keypad (30 s, 1, 2, 5, 10 min
+on keys 0-4, "‹ Back" on key 6, closes after a pick, Back, the plugin's Back action = `nav` `left`, or 15 s);
+`SlotManager.setMenu` shows it over the terms; `catchUp.press({ windowS })` / `saver.press({ windowS })` run the pick.
+Catch-up skips the menu when it shows Missed, is busy or its card is up. Plugin: Back / Forward actions (for the
+keypad's arrow buttons) send `{type: "nav", dir}`. Keypad colours: named presets per key group (panel.ts KEY_PALETTE): Black, meeting tones Ink, Focus, Indigo, Teal, classroom tones Chalkboard, Sage, Pencil, Terracotta, Paper; on any bg the plugin draws the category soft white / soft dark.
 Meeting / Education switch above the keypad mirror (main window). Panel Settings (⌘,): Source, Scenario, Theme (panel + overlay card), key backgrounds (protocol `bg`, the plugin
 switches to dark text on light colours); stored in Electron userData `settings.json` (`settings.ts`).
 Camera focus: `GazeClient` (`app/src/pipeline/gazeSource.ts`) reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`,
@@ -81,7 +94,8 @@ MX Brio), `FocusTracker` (`focus.ts`) turns it into focused / away (debounced) a
 Catch-up (slot 6) reads `Missed 2m` (amber) and summarises from when you looked away (`catchUp.setMissed`). A "For me?"
 question while away (`ForMeController` `onQuestion`) → `MentionAlert` (`mentionAlert.ts`) pulses all 9 keys red
 (`SlotManager.setFlash`); looking back or any press stops it and opens the For-me card. Panel: camera status,
-focus pill, Simulate away / Simulate mention / Calibrate gaze.
+focus pill, Calibrate gaze (Settings); Simulate away / Simulate a question for me sit in a quiet "Demo" row at the
+bottom of the main window, Mock only. Listener name: Alex (aliases Alec, Alix; short names get no one-edit matching).
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -117,7 +131,7 @@ Do not build features from later phases unless asked.
   `cd app && npm run smoke:live` (add `-- --keyterms` for glossary keyterms, `-- --lines 8` for a short run).
   Audio is cached in `tools/mock-audio/` (gitignored). Needs the system audio permission for the terminal.
 - Camera focus: install and calibrate the Logi Gaze Tracker app (README, "Camera focus"). Without it the panel's
-  Simulate away / Simulate mention buttons drive the same logic. `GAZE_WS_URL` overrides the tracker address.
+  Demo row (Mock only: Simulate away / Simulate a question for me) drives the same logic. `GAZE_WS_URL` overrides the tracker address.
 - System audio permission: System Settings → Privacy & Security → Screen & System Audio Recording →
   "System Audio Recording Only". For `npm run dev` this must be **Electron**
   (add `app/node_modules/electron/dist/Electron.app` with +): macOS credits the permission to Electron,
@@ -170,7 +184,7 @@ Do not build features from later phases unless asked.
 
 ## Data schemas (Phase 2+)
 - `mock/meeting.json`: array of `{ "t": 42.0, "speaker": "Lena", "text": "...", "terms": ["LoRA"] }`
-- `mock/config.json`: `{ "listenerName": "...", "listenerAliases": ["Rally"], "listenerKnows": "...", "keyterms": [] }`;
+- `mock/config.json`: `{ "listenerName": "Alex", "listenerAliases": ["Alec", "Alix"], "listenerKnows": "...", "keyterms": [] }`;
   `listenerAliases` = mishearings of the name (matched exactly, added to Deepgram keyterms); meeting lines say `{listener}`
   where a speaker addresses them. `listenerKnows` describes the listener for the spotter and explanation prompts. `keyterms` pre-fills the panel's "Meeting topic / keyterms" field (Deepgram keyterms, used at Start listening).
 - Live line (LiveSource `line` event): `{ t, speaker?, text, terms: [], end?, words?: [{ text, start, end }], reason? }`,
