@@ -200,15 +200,8 @@ function renderAudioText(): void {
 function renderToolbar(s: PanelSnapshotMsg): void {
   const current = s.scenarios.find((x) => x.id === s.scenario);
   const live = s.mode === "live";
-  // Short title in the bar ("Product sprint review"), the full one in the tooltip.
-  summaryEl.textContent = live
-    ? listening
-      ? "Listening"
-      : s.usage === "education"
-        ? "Live lecture"
-        : "Live meeting"
-    : (current?.title.replace(/\s*\(.*\)\s*$/, "") ?? "Mock");
-  summaryEl.title = `${live ? "Live" : "Mock"} · ${s.usage === "education" ? "Education" : "Meeting"}${!live && current ? ` · ${current.title}` : ""}`;
+  // The bar shows the app name; the session is in the tooltip and in the empty-state hint.
+  summaryEl.title = `IntelliPad · ${live ? (listening ? "Listening" : "Live") : "Mock"} · ${s.usage === "education" ? "Education" : "Meeting"}${!live && current ? ` · ${current.title}` : ""}`;
   stateDot.className = `state-dot${live && listening ? " listening" : !live && playing ? " playing" : ""}`;
   // Live: elapsed time in the bar. Mock: position / length sits next to the progress bar instead.
   timeEl.hidden = !live;
@@ -365,9 +358,25 @@ function renderEmpty(): void {
   const hasLines = transcriptEl.querySelector(".turn") !== null;
   emptyEl.hidden = hasLines;
   if (hasLines || !snap) return;
-  const what = snap.usage === "education" ? "lecture" : "meeting";
-  if (snap.mode === "mock") emptyEl.innerHTML = `Press <kbd>Space</kbd> to play the mock ${what}.`;
-  else emptyEl.innerHTML = listening ? "Listening… the transcript appears as people speak." : `Press <kbd>Space</kbd> to start listening.`;
+  const s = snap;
+  const span = document.createElement("span");
+  if (s.mode === "mock") {
+    const title = s.scenarios.find((x) => x.id === s.scenario)?.title.replace(/\s*\(.*\)\s*$/, "") ?? `the mock ${s.usage === "education" ? "lecture" : "meeting"}`;
+    const em = document.createElement("em");
+    em.textContent = title;
+    span.append("Press ", kbd("Space"), " to play ", em, ".");
+  } else if (listening) {
+    span.textContent = "Listening… the transcript appears as people speak.";
+  } else {
+    span.append("Press ", kbd("Space"), " to start listening.");
+  }
+  emptyEl.replaceChildren(span);
+}
+
+function kbd(text: string): HTMLElement {
+  const k = document.createElement("kbd");
+  k.textContent = text;
+  return k;
 }
 
 function renderSnapshot(s: PanelSnapshotMsg): void {

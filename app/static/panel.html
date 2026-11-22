@@ -10,8 +10,8 @@
     <!-- Title bar: the macOS window buttons sit in its left inset; the bar drags the window. -->
     <header class="toolbar">
       <div class="session">
+        <span id="summary" class="wordmark" aria-label="IntelliPad">Intelli<span class="pad">Pad</span></span>
         <span id="state-dot" class="state-dot" aria-hidden="true"></span>
-        <span id="summary" class="session-title">IntelliPad</span>
       </div>
       <span id="time" class="time">0:00</span>
       <button id="export" class="icon-btn" title="Export meeting notes (⌘E)" aria-label="Export meeting notes">
@@ -69,7 +69,7 @@
     </div>
 
     <main id="transcript" class="transcript" aria-live="polite">
-      <div id="empty" class="empty">Press <kbd>Space</kbd> to play the mock meeting.</div>
+      <div id="empty" class="empty"><span>Press <kbd>Space</kbd> to play the mock meeting.</span></div>
     </main>
 
     <!-- One-line status. Details are in Settings → Diagnostics and in the tooltips. -->
