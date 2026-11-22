@@ -1,0 +1,212 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Sofia",
+    "text": "Hi, welcome to your first week! I'm Sofia, your manager, and with me are Tom from IT and Nadia from HR.",
+    "terms": []
+  },
+  {
+    "t": 6.0,
+    "speaker": "Nadia",
+    "text": "Welcome aboard. We'll go through the essentials in about four minutes, promise.",
+    "terms": []
+  },
+  {
+    "t": 11.0,
+    "speaker": "Tom",
+    "text": "Let's start with your accounts. Everything runs through SSO, so you only have one password to remember.",
+    "terms": [
+      "SSO"
+    ]
+  },
+  {
+    "t": 19.0,
+    "speaker": "Tom",
+    "text": "On top of that, MFA is mandatory: you'll approve each new login on your phone.",
+    "terms": [
+      "MFA"
+    ]
+  },
+  {
+    "t": 27.0,
+    "speaker": "Sofia",
+    "text": "Is the authenticator app already set up on the new laptop?",
+    "terms": []
+  },
+  {
+    "t": 31.0,
+    "speaker": "Tom",
+    "text": "Yes. When you work from home, connect to the VPN before opening any internal tool.",
+    "terms": [
+      "VPN"
+    ]
+  },
+  {
+    "t": 39.0,
+    "speaker": "Tom",
+    "text": "We also follow least privilege: you get access to what your role needs, and you can request more through the help desk.",
+    "terms": [
+      "least privilege"
+    ]
+  },
+  {
+    "t": 48.0,
+    "speaker": "Tom",
+    "text": "And watch out for emails asking for your password. We run a phishing simulation every month to keep everyone sharp.",
+    "terms": [
+      "phishing simulation"
+    ]
+  },
+  {
+    "t": 57.0,
+    "speaker": "Nadia",
+    "text": "On my side, there are a few things about personal data.",
+    "terms": []
+  },
+  {
+    "t": 61.0,
+    "speaker": "Nadia",
+    "text": "Because we have customers in Europe, all customer data falls under GDPR, so never export it to a personal drive.",
+    "terms": [
+      "GDPR"
+    ]
+  },
+  {
+    "t": 70.0,
+    "speaker": "Nadia",
+    "text": "If you're unsure, ask our DPO before sharing anything outside the company.",
+    "terms": [
+      "DPO"
+    ]
+  },
+  {
+    "t": 78.0,
+    "speaker": "Nadia",
+    "text": "Holidays are booked as PTO in the HR portal, at least two weeks in advance.",
+    "terms": [
+      "PTO"
+    ]
+  },
+  {
+    "t": 86.0,
+    "speaker": "Nadia",
+    "text": "{listener}, could you complete the security and GDPR training modules before Friday?",
+    "terms": []
+  },
+  {
+    "t": 94.0,
+    "speaker": "Nadia",
+    "text": "Great, thanks. They take about forty minutes in total.",
+    "terms": []
+  },
+  {
+    "t": 100.0,
+    "speaker": "Sofia",
+    "text": "Now the team side. Every quarter we set OKRs, so everyone knows what matters most.",
+    "terms": [
+      "OKR"
+    ]
+  },
+  {
+    "t": 108.0,
+    "speaker": "Sofia",
+    "text": "This quarter, our main objective is to cut support ticket volume by twenty percent.",
+    "terms": []
+  },
+  {
+    "t": 115.0,
+    "speaker": "Sofia",
+    "text": "Progress is tracked with a few KPIs, like first response time and customer satisfaction.",
+    "terms": [
+      "KPI"
+    ]
+  },
+  {
+    "t": 123.0,
+    "speaker": "Sofia",
+    "text": "For big customers we also have an SLA: we must answer critical tickets within one hour.",
+    "terms": [
+      "SLA"
+    ]
+  },
+  {
+    "t": 131.0,
+    "speaker": "Tom",
+    "text": "Which is why we have an on-call rotation for nights and weekends.",
+    "terms": [
+      "on-call rotation"
+    ]
+  },
+  {
+    "t": 139.0,
+    "speaker": "Sofia",
+    "text": "Don't worry, you won't join the rotation before your third month.",
+    "terms": []
+  },
+  {
+    "t": 145.0,
+    "speaker": "Sofia",
+    "text": "When something breaks, we write a blameless postmortem: what happened, why, and how we prevent it, without pointing fingers.",
+    "terms": [
+      "postmortem"
+    ]
+  },
+  {
+    "t": 155.0,
+    "speaker": "Tom",
+    "text": "The template is in the wiki, under Engineering.",
+    "terms": []
+  },
+  {
+    "t": 160.0,
+    "speaker": "Sofia",
+    "text": "For decisions that involve several teams, we use a RACI chart so it's clear who decides and who just needs to know.",
+    "terms": [
+      "RACI"
+    ]
+  },
+  {
+    "t": 170.0,
+    "speaker": "Nadia",
+    "text": "And once a month there's an all-hands where the leadership shares results and answers questions.",
+    "terms": [
+      "all-hands"
+    ]
+  },
+  {
+    "t": 179.0,
+    "speaker": "Sofia",
+    "text": "Your onboarding buddy is Karim, who'll show you around the codebase and the support tools.",
+    "terms": []
+  },
+  {
+    "t": 186.0,
+    "speaker": "Sofia",
+    "text": "{listener}, could you set up a first one-on-one with me for next Tuesday?",
+    "terms": []
+  },
+  {
+    "t": 194.0,
+    "speaker": "Sofia",
+    "text": "Perfect. We'll use it to agree on your goals for the first ninety days.",
+    "terms": []
+  },
+  {
+    "t": 200.0,
+    "speaker": "Tom",
+    "text": "Last thing from me: if your laptop acts up, open a ticket instead of messaging me directly.",
+    "terms": []
+  },
+  {
+    "t": 207.0,
+    "speaker": "Nadia",
+    "text": "And our door is always open, even for the small questions.",
+    "terms": []
+  },
+  {
+    "t": 212.0,
+    "speaker": "Sofia",
+    "text": "Welcome again. Lunch with the team is at noon!",
+    "terms": []
+  }
+]

@@ -1,0 +1,191 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Prof. Okafor",
+    "text": "Good afternoon. Today in Climate Science 101 we look at why the planet is warming.",
+    "terms": []
+  },
+  {
+    "t": 6.0,
+    "speaker": "Prof. Okafor",
+    "text": "It starts with the greenhouse effect: some gases trap the heat the Earth sends back towards space.",
+    "terms": [
+      "greenhouse effect"
+    ]
+  },
+  {
+    "t": 15.0,
+    "speaker": "Lucie",
+    "text": "Isn't that effect natural?",
+    "terms": []
+  },
+  {
+    "t": 18.0,
+    "speaker": "Prof. Okafor",
+    "text": "It is, and without it the Earth would be frozen. The problem is that we're making it stronger.",
+    "terms": []
+  },
+  {
+    "t": 25.0,
+    "speaker": "Prof. Okafor",
+    "text": "Carbon dioxide in the air was about 280 ppm before the industrial era; today it's over 420.",
+    "terms": [
+      "ppm"
+    ]
+  },
+  {
+    "t": 34.0,
+    "speaker": "Hugo",
+    "text": "What does that unit stand for again?",
+    "terms": []
+  },
+  {
+    "t": 37.0,
+    "speaker": "Prof. Okafor",
+    "text": "Parts per million: 420 molecules of carbon dioxide in every million molecules of air.",
+    "terms": []
+  },
+  {
+    "t": 44.0,
+    "speaker": "Prof. Okafor",
+    "text": "Forests and oceans absorb part of what we emit. We call them carbon sinks.",
+    "terms": [
+      "carbon sink"
+    ]
+  },
+  {
+    "t": 52.0,
+    "speaker": "Prof. Okafor",
+    "text": "But the oceans pay a price: more carbon dioxide means ocean acidification, which harms corals and shellfish.",
+    "terms": [
+      "ocean acidification"
+    ]
+  },
+  {
+    "t": 62.0,
+    "speaker": "Lucie",
+    "text": "And why is the Arctic warming faster than everywhere else?",
+    "terms": []
+  },
+  {
+    "t": 66.0,
+    "speaker": "Prof. Okafor",
+    "text": "Because of albedo. Ice reflects sunlight, while dark ocean water absorbs it.",
+    "terms": [
+      "albedo"
+    ]
+  },
+  {
+    "t": 74.0,
+    "speaker": "Prof. Okafor",
+    "text": "Less ice means more warming, which melts more ice. That's a feedback loop.",
+    "terms": [
+      "feedback loop"
+    ]
+  },
+  {
+    "t": 82.0,
+    "speaker": "Prof. Okafor",
+    "text": "{listener}, can you think of another example of that kind of loop that might speed up warming?",
+    "terms": []
+  },
+  {
+    "t": 90.0,
+    "speaker": "Prof. Okafor",
+    "text": "Good answer: thawing permafrost releases methane, a very powerful greenhouse gas.",
+    "terms": [
+      "permafrost",
+      "methane"
+    ]
+  },
+  {
+    "t": 99.0,
+    "speaker": "Hugo",
+    "text": "Could that become impossible to stop?",
+    "terms": []
+  },
+  {
+    "t": 103.0,
+    "speaker": "Prof. Okafor",
+    "text": "Scientists warn about tipping points: thresholds after which a change continues on its own.",
+    "terms": [
+      "tipping point"
+    ]
+  },
+  {
+    "t": 112.0,
+    "speaker": "Prof. Okafor",
+    "text": "The IPCC, the UN's climate science panel, says we should limit warming to 1.5 degrees.",
+    "terms": [
+      "IPCC"
+    ]
+  },
+  {
+    "t": 121.0,
+    "speaker": "Lucie",
+    "text": "Is 1.5 still realistic?",
+    "terms": []
+  },
+  {
+    "t": 125.0,
+    "speaker": "Prof. Okafor",
+    "text": "Barely. It depends on the carbon budget: how much more carbon dioxide we can emit before we pass that limit.",
+    "terms": [
+      "carbon budget"
+    ]
+  },
+  {
+    "t": 134.0,
+    "speaker": "Prof. Okafor",
+    "text": "At today's rate, the budget for 1.5 degrees runs out in about six years.",
+    "terms": []
+  },
+  {
+    "t": 140.0,
+    "speaker": "Hugo",
+    "text": "That's why countries talk about net zero by 2050?",
+    "terms": [
+      "net zero"
+    ]
+  },
+  {
+    "t": 144.0,
+    "speaker": "Prof. Okafor",
+    "text": "Exactly. It means every tonne we still emit is balanced by a tonne removed from the air.",
+    "terms": []
+  },
+  {
+    "t": 153.0,
+    "speaker": "Prof. Okafor",
+    "text": "Removal can mean planting forests, or carbon capture machines that pull it out directly.",
+    "terms": [
+      "carbon capture"
+    ]
+  },
+  {
+    "t": 162.0,
+    "speaker": "Lucie",
+    "text": "Can individuals actually make a difference?",
+    "terms": []
+  },
+  {
+    "t": 166.0,
+    "speaker": "Prof. Okafor",
+    "text": "Yes. Your carbon footprint, the emissions caused by how you live, can often be cut by a third.",
+    "terms": [
+      "carbon footprint"
+    ]
+  },
+  {
+    "t": 175.0,
+    "speaker": "Prof. Okafor",
+    "text": "{listener}, could you calculate your own footprint before next week and bring the result?",
+    "terms": []
+  },
+  {
+    "t": 184.0,
+    "speaker": "Prof. Okafor",
+    "text": "We'll compare results anonymously. Thanks, see you Thursday.",
+    "terms": []
+  }
+]

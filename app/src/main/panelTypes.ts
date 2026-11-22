@@ -58,6 +58,13 @@ export interface PanelFocus {
 
 export interface PanelSnapshot {
   mode: PanelMode;
+  /** Meeting or Education: the bottom row and the mock content. */
+  usage: "meeting" | "education";
+  /** Theme and key backgrounds (Settings view). */
+  settings: { theme: "dark" | "light"; keyBg: Partial<Record<"terms" | "6" | "7" | "8", string>> };
+  /** Mock scenarios for the current mode, and the chosen one. */
+  scenarios: { id: string; title: string }[];
+  scenario: string;
   playback: PlaybackState;
   live: PanelLive;
   llm: PanelLlm;
@@ -102,6 +109,15 @@ export type PanelCommand =
   /** arg: the keyterms text (remembered while typing) */
   | "keyterms"
   /** arg: "on" | "off" */
+  | "theme-dark"
+  | "theme-light"
+  /** arg: "terms=#RRGGBB", "6=#RRGGBB" … ("target=" clears it) */
+  | "key-bg"
+  | "key-bg-reset"
+  /** arg: scenario id (mock/scenarios/index.json) */
+  | "scenario"
+  | "usage-meeting"
+  | "usage-education"
   | "sim-away"
   /** Pretend the mention detector heard your name now. */
   | "sim-mention"

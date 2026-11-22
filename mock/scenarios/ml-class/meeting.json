@@ -1,0 +1,200 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Hello everyone, welcome to lecture three of Introduction to Machine Learning.",
+    "terms": []
+  },
+  {
+    "t": 5.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Today we finally open the black box and look at how a model actually learns.",
+    "terms": []
+  },
+  {
+    "t": 10.0,
+    "speaker": "Dr. Nguyen",
+    "text": "We start with a neural network: layers of tiny units that each multiply, add and pass a number on.",
+    "terms": [
+      "neural network"
+    ]
+  },
+  {
+    "t": 19.0,
+    "speaker": "Sara",
+    "text": "Are those units like real brain cells?",
+    "terms": []
+  },
+  {
+    "t": 23.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Loosely inspired by them, but much simpler. Think of them as adjustable dials.",
+    "terms": []
+  },
+  {
+    "t": 29.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Every dial is a parameter, and a modern model can have billions of them.",
+    "terms": [
+      "parameter"
+    ]
+  },
+  {
+    "t": 37.0,
+    "speaker": "Yanis",
+    "text": "How does the model know which way to turn the dials?",
+    "terms": []
+  },
+  {
+    "t": 41.0,
+    "speaker": "Dr. Nguyen",
+    "text": "First we need a training set: thousands of examples where we already know the right answer.",
+    "terms": [
+      "training set"
+    ]
+  },
+  {
+    "t": 49.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Then a loss function measures how wrong the model is on those examples.",
+    "terms": [
+      "loss function"
+    ]
+  },
+  {
+    "t": 57.0,
+    "speaker": "Dr. Nguyen",
+    "text": "The goal of learning is simply to make that number as small as possible.",
+    "terms": []
+  },
+  {
+    "t": 63.0,
+    "speaker": "Dr. Nguyen",
+    "text": "We do it with gradient descent: we nudge every parameter a little in the direction that reduces the loss.",
+    "terms": [
+      "gradient descent"
+    ]
+  },
+  {
+    "t": 73.0,
+    "speaker": "Sara",
+    "text": "And how do we know that direction for billions of parameters?",
+    "terms": []
+  },
+  {
+    "t": 77.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Backpropagation computes it efficiently, starting from the error and working backwards through the layers.",
+    "terms": [
+      "backpropagation"
+    ]
+  },
+  {
+    "t": 86.0,
+    "speaker": "Dr. Nguyen",
+    "text": "{listener}, what do you think happens if we nudge the parameters too much at each step?",
+    "terms": []
+  },
+  {
+    "t": 94.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Exactly, it overshoots. That step size is called the learning rate.",
+    "terms": [
+      "learning rate"
+    ]
+  },
+  {
+    "t": 102.0,
+    "speaker": "Yanis",
+    "text": "So small steps are always better?",
+    "terms": []
+  },
+  {
+    "t": 106.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Too small and training takes forever. One full pass over the training set is called an epoch, and we often need dozens.",
+    "terms": [
+      "epoch"
+    ]
+  },
+  {
+    "t": 116.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Now the classic trap: overfitting.",
+    "terms": [
+      "overfitting"
+    ]
+  },
+  {
+    "t": 120.0,
+    "speaker": "Dr. Nguyen",
+    "text": "The model memorises the training examples instead of learning the general pattern.",
+    "terms": []
+  },
+  {
+    "t": 126.0,
+    "speaker": "Sara",
+    "text": "Like a student who memorises last year's exam answers?",
+    "terms": []
+  },
+  {
+    "t": 130.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Perfect analogy. It does great on familiar questions and fails on new ones.",
+    "terms": []
+  },
+  {
+    "t": 136.0,
+    "speaker": "Dr. Nguyen",
+    "text": "That's why we keep a separate test set the model never sees during training.",
+    "terms": [
+      "test set"
+    ]
+  },
+  {
+    "t": 144.0,
+    "speaker": "Dr. Nguyen",
+    "text": "To fight it we also use regularization, which penalises overly complicated models.",
+    "terms": [
+      "regularization"
+    ]
+  },
+  {
+    "t": 153.0,
+    "speaker": "Yanis",
+    "text": "Does all this apply to chat assistants too?",
+    "terms": []
+  },
+  {
+    "t": 157.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Yes. They're built on the transformer, a network design that pays attention to every word in relation to the others.",
+    "terms": [
+      "transformer"
+    ]
+  },
+  {
+    "t": 167.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Same recipe though: a loss, gradient descent, and an enormous training set.",
+    "terms": []
+  },
+  {
+    "t": 173.0,
+    "speaker": "Dr. Nguyen",
+    "text": "{listener}, could you explain in your own words the difference between the training set and the test set?",
+    "terms": []
+  },
+  {
+    "t": 182.0,
+    "speaker": "Dr. Nguyen",
+    "text": "Very clear, thank you. For next week, try the gradient descent notebook on the course page.",
+    "terms": []
+  },
+  {
+    "t": 188.0,
+    "speaker": "Dr. Nguyen",
+    "text": "See you on Tuesday.",
+    "terms": []
+  }
+]

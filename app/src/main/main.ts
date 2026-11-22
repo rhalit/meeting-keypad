@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { AudioCapture } from "../pipeline/audioCapture.js";
 import { CatchUpController, longSpan, type LlmOutcome } from "../pipeline/catchUp.js";
+import { FlashcardController, QuizController, fileFlashcards } from "../pipeline/education.js";
 import { realClock } from "../pipeline/clock.js";
 import { FocusTracker, type AwayPeriod, type FocusStatus } from "../pipeline/focus.js";
 import { DEFAULT_GAZE_URL, GazeClient, type GazeStatus } from "../pipeline/gazeSource.js";
@@ -25,11 +26,13 @@ import { LatencyTracker, formatLatency } from "../pipeline/latency.js";
 import { TermSpotter, type SpotInfo } from "../pipeline/termSpotter.js";
 import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
 import { MentionAlert } from "../pipeline/mentionAlert.js";
-import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
+import { loadConfig, loadGlossary, loadMeeting, loadScenarioIndex } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
 import { OverlayController, type HideReason, type OverlayCard } from "../pipeline/overlay.js";
 import { PressDebouncer } from "../pipeline/pressGuard.js";
-import type { KeyState } from "../pipeline/protocol.js";
+import { actionKeysFor, type KeyState, type Usage } from "../pipeline/protocol.js";
+import { explainSimplyMessages } from "../pipeline/prompts.js";
+import { loadSettings, parseKeyBgArg, saveSettings, type Settings } from "../pipeline/settings.js";
 import { SaveController, fileSavedIdeas } from "../pipeline/save.js";
 import { SlotManager } from "../pipeline/slots.js";
 import { SttError, deepgramFactory, loadSttConfig, parseKeyterms, sttAdvice, type SttFactory } from "../pipeline/stt.js";
@@ -48,13 +51,51 @@ const mockDir = join(appRoot, "..", "mock");
 const savedIdeasPath = join(appRoot, "..", "output", "saved-ideas.md");
 const meetingsDir = join(appRoot, "..", "output", "meetings");
 
+const flashcardsPath = join(appRoot, "..", "output", "flashcards.csv");
+
 const config = loadConfig(join(mockDir, "config.json"));
-const meeting = loadMeeting(join(mockDir, "meeting.json"), config.listenerName);
-const glossary = loadGlossary(join(mockDir, "glossary.json"));
+
+// --- user settings (panel Settings view): theme, key backgrounds, scenario per mode; userData/settings.json ---
+const settingsPath = join(app.getPath("userData"), "settings.json");
+let settings: Settings = loadSettings(settingsPath);
+
+// --- mock scenarios (mock/scenarios/index.json): several meetings and lectures, one chosen per mode ----------
+const scenarios = loadScenarioIndex(join(mockDir, "scenarios", "index.json"));
+const DEFAULT_SCENARIO: Record<Usage, string> = { meeting: "sprint", education: "lecture" };
+const scenarioInfo = (id: string) => scenarios.find((x) => x.id === id);
+/** The chosen scenario for a mode: MOCK_SCENARIO (meeting, at startup), the saved choice, else the default. */
+const chosen: Record<Usage, string> = { meeting: DEFAULT_SCENARIO.meeting, education: DEFAULT_SCENARIO.education };
+for (const u of ["meeting", "education"] as const) {
+  const want = (u === "meeting" ? process.env.MOCK_SCENARIO : undefined) || settings.scenario[u];
+  if (want && scenarioInfo(want)?.usage === u) chosen[u] = want;
+  else if (want) console.log(`WARNING: unknown ${u} scenario "${want}", using "${chosen[u]}"`);
+}
+function scenarioFor(u: Usage): string {
+  return chosen[u];
+}
+function loadScenario(id: string) {
+  const dir = join(mockDir, scenarioInfo(id)!.path);
+  return { meeting: loadMeeting(join(dir, "meeting.json"), config.listenerName), glossary: loadGlossary(join(dir, "glossary.json")) };
+}
+let usage: Usage = process.env.USAGE === "education" ? "education" : "meeting";
+let { meeting, glossary } = loadScenario(scenarioFor(usage));
 
 const clock = realClock;
 const transcript = new TranscriptBuffer();
 const slots = new SlotManager({ clock });
+slots.setActionKeys(actionKeysFor(usage));
+
+slots.setBackgrounds(settings.keyBg);
+
+function updateSettings(next: Settings): void {
+  settings = next;
+  try {
+    saveSettings(settingsPath, settings);
+  } catch (err) {
+    log(`WARNING: settings not saved: ${(err as Error).message}`);
+  }
+  pushSnapshot();
+}
 const bridge = new KeypadBridge({ initial: slots.getAll(), log: (m) => log(`[keypad] ${m}`) });
 const mockSource = new MockSource(meeting, glossary, clock);
 let mode: PanelMode = "mock";
@@ -156,6 +197,34 @@ const catchUp = new CatchUpController({
   onLlmOutcome,
   listenerName: config.listenerName,
 });
+// --- Education mode: Explain simply (slot 8, the Catch-up engine), Flashcard (6), Quiz me (7) ---------
+const explain = new CatchUpController({
+  clock,
+  llm,
+  transcript,
+  meetingTime,
+  keys: slots,
+  overlay,
+  log,
+  onLlmOutcome,
+  listenerName: config.listenerName,
+  slot: 8,
+  name: "Explain simply",
+  messages: explainSimplyMessages,
+});
+const flashcards = new FlashcardController({
+  clock,
+  llm,
+  transcript,
+  meetingTime,
+  keys: slots,
+  overlay,
+  log,
+  onLlmOutcome,
+  file: fileFlashcards(flashcardsPath),
+});
+const quiz = new QuizController({ clock, llm, transcript, meetingTime, keys: slots, overlay, log, onLlmOutcome });
+
 const spotter = new TermSpotter({
   clock,
   llm: spotterLlm,
@@ -181,7 +250,7 @@ focus.on("change", (s: FocusStatus) => {
 });
 focus.on("back", (p: AwayPeriod) => {
   log(`[focus] back after ${Math.round(p.ms / 1000)} s away, meeting ${mmss(p.from)}-${mmss(p.to)}`);
-  catchUp.setMissed(p);
+  (usage === "education" ? explain : catchUp).setMissed(p); // the key that summarises: Catch-up or Explain simply
   mentionAlert.back();
 });
 
@@ -201,7 +270,8 @@ const forMe = new ForMeController({
   clock,
   llm,
   transcript,
-  keys: slots,
+  // Education mode has no For-me key (slot 8 is Explain simply): questions still count for the away pulse.
+  keys: { setActionOverride: (slot, o) => (usage === "meeting" ? slots.setActionOverride(slot, o) : undefined) },
   overlay,
   log,
   onLlmOutcome,
@@ -234,6 +304,10 @@ function send(channel: string, payload?: unknown): void {
 function snapshot(): PanelSnapshot {
   return {
     mode,
+    usage,
+    settings,
+    scenarios: scenarios.filter((x) => x.usage === usage).map(({ id, title }) => ({ id, title })),
+    scenario: scenarioFor(usage),
     playback: mockSource.state(),
     live: { ...liveSource.state(), keytermsText, configAdvice: sttConfigAdvice, spotter: spotter.status(), learnedKeyterms },
     llm: llmStatus,
@@ -308,6 +382,9 @@ function resetMeeting(why: string): void {
   log(`reset (${why})`);
   catchUp.cancel();
   saver.reset();
+  explain.cancel();
+  flashcards.reset();
+  quiz.reset();
   forMe.reset();
   record.reset();
   spotter.reset();
@@ -377,6 +454,34 @@ async function setMode(m: PanelMode): Promise<void> {
   pushSnapshot();
 }
 
+/** Meeting <-> Education: new bottom row, and in Mock mode the matching mock content. */
+function setUsage(u: Usage): void {
+  if (u === usage) return;
+  usage = u;
+  ({ meeting, glossary } = loadScenario(scenarioFor(u)));
+  mockSource.load(meeting, glossary);
+  resetMeeting(`usage ${u}`);
+  slots.setActionKeys(actionKeysFor(u));
+  log(`usage: ${u}, scenario "${scenarioFor(u)}" (${meeting.length} mock lines, ${Object.keys(glossary).length} glossary terms)`);
+  pushSnapshot();
+}
+
+/** Another mock scenario for the current mode (Settings → Scenario). Rewinds; remembered per mode. */
+function setScenario(id: string): void {
+  const info = scenarioInfo(id);
+  if (!info || info.usage !== usage) {
+    log(`panel: ignored scenario "${id}" (not a ${usage} scenario)`);
+    return;
+  }
+  if (id === chosen[usage]) return;
+  chosen[usage] = id;
+  ({ meeting, glossary } = loadScenario(id));
+  mockSource.load(meeting, glossary);
+  resetMeeting(`scenario ${id}`);
+  log(`scenario: ${info.title} (${meeting.length} lines, ${Object.keys(glossary).length} glossary terms)`);
+  updateSettings({ ...settings, scenario: { ...settings.scenario, [usage]: id } });
+}
+
 function startListening(text: string): void {
   if (mode !== "live" || liveSource.isListening()) return;
   keytermsText = text;
@@ -422,7 +527,19 @@ bridge.on("press", ({ slot }: PressEvent) => {
     case "action": {
       const before = overlay.current()?.id;
       const outcome =
-        r.action === "catch-up" ? catchUp.press() : r.action === "save" ? saver.press() : r.action === "for-me" ? forMe.press() : null;
+        r.action === "catch-up"
+          ? catchUp.press()
+          : r.action === "save"
+            ? saver.press()
+            : r.action === "for-me"
+              ? forMe.press()
+              : r.action === "flashcard"
+                ? flashcards.press()
+                : r.action === "quiz"
+                  ? quiz.press()
+                  : r.action === "explain"
+                    ? explain.press()
+                    : null;
       if (outcome === null) {
         log(`PRESS slot ${slot}: ${r.action} (not implemented yet)`);
         break;
@@ -543,6 +660,37 @@ ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
     case "keyterms":
       if (typeof arg === "string") keytermsText = arg;
       break;
+    case "theme-dark":
+    case "theme-light": {
+      const theme = cmd === "theme-light" ? "light" : "dark";
+      overlayWindow?.setTheme(theme);
+      updateSettings({ ...settings, theme });
+      break;
+    }
+    case "key-bg": {
+      const change = parseKeyBgArg(arg);
+      if (!change) {
+        log(`panel: ignored key-bg "${String(arg)}"`);
+        break;
+      }
+      const keyBg = { ...settings.keyBg };
+      if (change.color) keyBg[change.target] = change.color;
+      else delete keyBg[change.target];
+      slots.setBackgrounds(keyBg);
+      updateSettings({ ...settings, keyBg });
+      break;
+    }
+    case "key-bg-reset":
+      slots.setBackgrounds({});
+      updateSettings({ ...settings, keyBg: {} });
+      break;
+    case "scenario":
+      if (typeof arg === "string") setScenario(arg);
+      break;
+    case "usage-meeting":
+    case "usage-education":
+      setUsage(cmd === "usage-education" ? "education" : "meeting");
+      break;
     case "export":
       exportMeeting("button", true);
       break;
@@ -566,7 +714,7 @@ function createPanel(): void {
     minWidth: 380,
     minHeight: 520,
     title: "Meeting Keypad",
-    backgroundColor: "#0D1117",
+    backgroundColor: settings.theme === "light" ? "#F6F8FA" : "#0D1117",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -600,6 +748,7 @@ app.whenReady().then(async () => {
   }
 
   overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, log: (m) => log(`[overlay] ${m}`) });
+  overlayWindow.setTheme(settings.theme);
   createPanel();
   void runWarmUp();
   gaze.start(); // retries every 2 s, so the Gaze Tracker app can start before or after us
@@ -608,7 +757,7 @@ app.whenReady().then(async () => {
       log(r.ok ? `[spotter-llm] warm-up ok: ${spotterLlm.describe()} in ${r.ms} ms` : `[spotter-llm] WARNING: warm-up failed: ${r.error.kind}: ${r.error.message}`),
     );
   }
-  log(`ready: ${meeting.length} lines, ${Object.keys(glossary).length} glossary terms, listener "${config.listenerName}". Press Play in the panel.`);
+  log(`ready (${usage}, scenario ${scenarioFor(usage)}): ${meeting.length} lines, ${Object.keys(glossary).length} glossary terms, listener "${config.listenerName}". Press Play in the panel.`);
   if (process.env.AUTOPLAY === "1") mockSource.play(); // AUTOPLAY=1 npm run dev: start the meeting right away
   if (process.env.AUTOLISTEN === "1") {
     // AUTOLISTEN=1 npm run dev: Live mode, listening right away
@@ -625,6 +774,9 @@ app.on("before-quit", () => {
   forMe.reset();
   catchUp.cancel();
   saver.reset();
+  explain.cancel();
+  flashcards.reset();
+  quiz.reset();
   mentionAlert.reset();
   gaze.stop();
   spotter.dispose();

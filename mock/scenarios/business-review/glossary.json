@@ -1,0 +1,74 @@
+{
+  "ARR": {
+    "full": "Annual recurring revenue",
+    "explanation": "The yearly value of all the subscription contracts a company has right now, as if they continued unchanged for twelve months. It leaves out one-off fees. Software companies use it as their main measure of size and growth, because it shows how much money comes in reliably every year.",
+    "example": "Our ARR passed twelve million",
+    "category": "Finance"
+  },
+  "NRR": {
+    "full": "Net revenue retention",
+    "explanation": "How much revenue a group of existing customers brings in this year compared with last year, counting upgrades, downgrades and customers who left. Above one hundred percent means existing customers spend more over time even without new sales. Investors see it as a strong sign that customers find the product valuable.",
+    "example": "current customers grow their spend every year",
+    "category": "Finance"
+  },
+  "gross margin": {
+    "full": "Gross margin",
+    "explanation": "The share of revenue left after paying the direct costs of delivering the product, such as hosting, servers and customer support. If a company earns one hundred euros and delivery costs thirty, the gross margin is seventy percent. A higher margin means more money is left for growth, salaries and profit.",
+    "example": "Gross margin dropped to seventy-one percent",
+    "category": "Finance"
+  },
+  "EBITDA": {
+    "full": "Earnings before interest, taxes, depreciation and amortisation",
+    "explanation": "A measure of profit from running the business, before interest on loans, taxes and accounting charges for the wear of equipment and other assets. It lets people compare how profitable day-to-day operations are, regardless of how a company is financed. A negative figure means everyday operations still cost more than they bring in.",
+    "example": "EBITDA is still negative",
+    "category": "Finance"
+  },
+  "CAC payback": {
+    "full": "Customer acquisition cost payback period",
+    "explanation": "How many months it takes for the profit from a new customer to cover what the company spent to win them, such as advertising and sales salaries. Shorter is better: fourteen months means the money spent comes back in just over a year. After that point, the customer starts to be profitable.",
+    "example": "the CAC payback is fourteen months",
+    "category": "Business"
+  },
+  "LTV": {
+    "full": "Customer lifetime value",
+    "explanation": "The total profit a company expects to make from one customer over the whole time they stay. It depends on how much they pay, how profitable that is and how long they stay. Companies compare it with the cost of winning a customer: a healthy business earns several times more than it spends.",
+    "example": "an LTV of about ninety thousand euros per customer",
+    "category": "Business"
+  },
+  "pipeline coverage": {
+    "full": "Pipeline coverage",
+    "explanation": "The total value of open sales opportunities compared with the sales target for a period. Three times coverage means potential deals worth three times the target are being worked on. Since many deals are lost or delayed, sales teams want several times the target in the pipeline to feel confident they will hit it.",
+    "example": "three times pipeline coverage",
+    "category": "Business"
+  },
+  "TAM": {
+    "full": "Total addressable market",
+    "explanation": "The total revenue a company could earn if every possible customer in its market bought its product. It is an estimate of how big the opportunity is, not a forecast of sales. Investors use it to judge how large a company could become if it keeps growing and winning customers.",
+    "example": "Our TAM in Europe alone is about four billion euros",
+    "category": "Business"
+  },
+  "Series B": {
+    "full": "Series B funding round",
+    "explanation": "The second major round of investment a start-up raises from venture capital investors, after a first Series A. It usually comes once the product clearly works and revenue is growing, and the money is used to scale up: more sales people, new countries and a bigger team. Later rounds follow alphabetically.",
+    "example": "raise a Series B early next year",
+    "category": "Finance"
+  },
+  "dilution": {
+    "full": "Share dilution",
+    "explanation": "The drop in existing owners' percentage of a company when it issues new shares, for example to investors in a funding round. Owners keep the same number of shares, but those shares now represent a smaller slice. If the money raised makes the company more valuable, their smaller slice can still be worth more.",
+    "example": "eighteen percent dilution for current shareholders",
+    "category": "Finance"
+  },
+  "OpEx": {
+    "full": "Operating expenses",
+    "explanation": "The ongoing costs of running a business day to day, such as salaries, rent, software subscriptions and marketing. They differ from large one-off investments in equipment or buildings, which are called capital expenses. Keeping operating expenses growing more slowly than revenue is how a company moves towards profitability.",
+    "example": "costs grew faster than revenue this quarter",
+    "category": "Finance"
+  },
+  "unit economics": {
+    "full": "Unit economics",
+    "explanation": "The revenue and costs linked to a single unit of business, usually one customer or one order. They show whether each sale makes or loses money once all direct costs are counted. A company with good unit economics becomes more profitable as it grows; one with bad unit economics loses more with every sale.",
+    "example": "every euro has to show a return",
+    "category": "Business"
+  }
+}

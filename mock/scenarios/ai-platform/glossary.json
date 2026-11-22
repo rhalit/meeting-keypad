@@ -1,0 +1,92 @@
+{
+  "hallucination": {
+    "full": "AI hallucination",
+    "explanation": "When an AI language model states something false with full confidence, such as an invented policy, a fake quote or a wrong number. It happens because the model predicts likely-sounding words rather than checking facts. Grounding it in real documents, testing it and showing sources all reduce how often it happens.",
+    "example": "the LLM writes something fluent that isn't true",
+    "category": "Tech"
+  },
+  "LLM": {
+    "full": "Large language model",
+    "explanation": "An AI system trained on huge amounts of text to predict the next word, which lets it answer questions, write, summarise and translate. Chat assistants are built on them. They are powerful but do not truly know facts; they generate plausible text, so their answers still need checking for important decisions.",
+    "example": "the LLM writes something fluent",
+    "category": "Tech"
+  },
+  "context window": {
+    "full": "Context window",
+    "explanation": "The maximum amount of text an AI model can take into account at once, including the conversation so far, any documents and its own answer. Anything beyond that limit is cut off and simply forgotten by the model. Larger windows let it handle long documents but make each request slower and more expensive.",
+    "example": "we cut the conversation when it gets too long",
+    "category": "Tech"
+  },
+  "embeddings": {
+    "full": "Embeddings",
+    "explanation": "Lists of numbers that capture the meaning of a piece of text, so that texts about similar things get similar numbers. They let software find the help articles closest in meaning to a question, even when the words differ. They are the basis of semantic search and of feeding the right documents to an AI.",
+    "example": "We turn every help article into embeddings",
+    "category": "Tech"
+  },
+  "token": {
+    "full": "Token",
+    "explanation": "The small chunk of text an AI model reads and writes, usually a word or part of a word; a page is roughly five hundred of them. AI providers charge per token sent and received, and limits such as the context window are counted in tokens, so longer prompts cost more and run slower.",
+    "example": "We pay per token",
+    "category": "Tech"
+  },
+  "inference": {
+    "full": "Inference",
+    "explanation": "Running a trained AI model to get an answer, as opposed to training it in the first place. Every question a user asks triggers inference on powerful computers. With many users, these running costs add up quickly and often become larger than the one-time cost of building the model.",
+    "example": "Inference is now our biggest cloud cost",
+    "category": "Tech"
+  },
+  "distillation": {
+    "full": "Knowledge distillation",
+    "explanation": "Training a small, cheap AI model to imitate the answers of a large, expensive one on the tasks you care about. The small model learns from thousands of examples produced by the big one. It ends up nearly as good on those tasks, while being much faster and cheaper to run.",
+    "example": "train a small model to copy the big one",
+    "category": "Tech"
+  },
+  "GPU": {
+    "full": "Graphics processing unit",
+    "explanation": "A computer chip first designed for video games that can do thousands of simple calculations at the same time. That makes it ideal for training and running AI models. These chips are expensive and in high demand, so renting them from cloud providers is often the biggest cost of an AI product.",
+    "example": "cut our GPU bill in half",
+    "category": "Tech"
+  },
+  "evals": {
+    "full": "Evaluations (evals)",
+    "explanation": "A fixed set of test questions with known good answers, used to measure how well an AI system performs. Teams rerun them after every change to the model, prompt or data, and compare scores. They catch quality drops before users do, much like automated tests in regular software.",
+    "example": "a fixed set of real questions we score after every change",
+    "category": "Tech"
+  },
+  "prompt injection": {
+    "full": "Prompt injection",
+    "explanation": "An attack where someone hides instructions inside text that an AI will read, such as an email, web page or support ticket, hoping it obeys them instead of its real rules. It can make an assistant leak data or take unwanted actions. Defences include filters, strict permissions and human checks.",
+    "example": "they hid instructions in a ticket",
+    "category": "Tech"
+  },
+  "guardrails": {
+    "full": "AI guardrails",
+    "explanation": "Safety checks placed around an AI model that inspect what goes in and what comes out. They can block harmful requests, remove personal data, stop off-topic answers or catch attempts to trick the model. They act like a seatbelt: the model still drives, but mistakes are less likely to cause damage.",
+    "example": "They check every input and output against a list of rules",
+    "category": "Tech"
+  },
+  "red teaming": {
+    "full": "Red teaming",
+    "explanation": "Deliberately attacking your own system to find weaknesses before real attackers or users do. For an AI product, testers try to make it say harmful things, leak data or break its rules, and the findings are fixed before launch. The name comes from military exercises where a red team plays the enemy.",
+    "example": "run a few red teaming sessions before the launch",
+    "category": "Tech"
+  },
+  "AI agent": {
+    "full": "AI agent",
+    "explanation": "An AI system that does not just answer but takes actions to reach a goal, such as looking up an order, filling a form or issuing a refund through other software. It plans steps, uses tools and checks results. Because it acts in the real world, it usually needs limits and human approval.",
+    "example": "an AI agent that can actually issue refunds",
+    "category": "Tech"
+  },
+  "human in the loop": {
+    "full": "Human in the loop",
+    "explanation": "A design where a person reviews or approves what an automated system does before it takes effect. The AI does the routine work, like drafting a refund, and a human makes the final call. It catches mistakes and keeps someone accountable, especially for decisions involving money, health or legal rights.",
+    "example": "the agent prepares the refund, a person approves it",
+    "category": "Business"
+  },
+  "function calling": {
+    "full": "Function calling (tool use)",
+    "explanation": "A feature that lets an AI model ask the surrounding software to run a specific action, such as looking up an invoice or creating a refund, with the right details filled in. The software runs it and returns the result to the model. It is how assistants connect to real company systems safely.",
+    "example": "call our billing API with function calling",
+    "category": "Tech"
+  }
+}

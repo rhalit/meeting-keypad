@@ -13,14 +13,33 @@ export interface KeyState {
   sub?: string;
   /** #RRGGBB: category colour on term keys, label colour on keys without `sub`. */
   color?: string;
+  /** #RRGGBB key background (user setting); absent = black. Not sent for `empty` / `alert`. */
+  bg?: string;
   state: SlotState;
 }
 
-export const ACTION_KEYS: Readonly<Record<number, { label: string; name: string }>> = {
+export type ActionKeyMap = Readonly<Record<number, { label: string; name: string }>>;
+
+/** Meeting mode (default) bottom row. */
+export const ACTION_KEYS: ActionKeyMap = {
   6: { label: "Catch-up", name: "catch-up" },
   7: { label: "Save", name: "save" },
   8: { label: "For me?", name: "for-me" },
 };
+
+/** Education mode bottom row (slots 0-5 stay term keys). */
+export const EDUCATION_ACTION_KEYS: ActionKeyMap = {
+  6: { label: "Flashcard", name: "flashcard" },
+  7: { label: "Quiz me", name: "quiz" },
+  8: { label: "Explain simply", name: "explain" },
+};
+
+/** What the app is used for: changes the bottom row and the mock content. */
+export type Usage = "meeting" | "education";
+
+export function actionKeysFor(usage: Usage): ActionKeyMap {
+  return usage === "education" ? EDUCATION_ACTION_KEYS : ACTION_KEYS;
+}
 
 export const CATEGORIES = ["Tech", "Science", "Health", "Business", "Finance", "Law", "Other"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -57,7 +76,12 @@ export function emptyKey(slot: number): KeyState {
 }
 
 export function actionKey(slot: number): KeyState {
-  return { slot, label: ACTION_KEYS[slot].label, state: "shown" };
+  return actionKeyIn(ACTION_KEYS, slot);
+}
+
+/** An action key's normal look in a given layout (Meeting / Education). */
+export function actionKeyIn(keys: ActionKeyMap, slot: number): KeyState {
+  return { slot, label: keys[slot].label, state: "shown" };
 }
 
 export function isTermSlot(slot: number): boolean {

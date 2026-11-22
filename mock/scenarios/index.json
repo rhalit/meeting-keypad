@@ -1,0 +1,9 @@
+[
+  { "id": "sprint", "title": "Product sprint review (AI search launch)", "usage": "meeting", "path": "." },
+  { "id": "ai-platform", "title": "AI platform sync (assistant, costs, safety)", "usage": "meeting", "path": "scenarios/ai-platform" },
+  { "id": "business-review", "title": "Quarterly business review", "usage": "meeting", "path": "scenarios/business-review" },
+  { "id": "onboarding", "title": "New employee onboarding", "usage": "meeting", "path": "scenarios/onboarding" },
+  { "id": "lecture", "title": "Learning sciences: how the brain learns", "usage": "education", "path": "scenarios/lecture" },
+  { "id": "ml-class", "title": "Intro to machine learning", "usage": "education", "path": "scenarios/ml-class" },
+  { "id": "climate", "title": "Climate science 101", "usage": "education", "path": "scenarios/climate" }
+]

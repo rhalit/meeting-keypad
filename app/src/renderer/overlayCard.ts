@@ -31,6 +31,7 @@ interface OverlayApi {
   onUpdate(cb: (card: OverlayCardMsg) => void): void;
   onReveal(cb: (id: number) => void): void;
   onHide(cb: () => void): void;
+  onTheme(cb: (theme: string) => void): void;
   sized(id: number, height: number): void;
   shown(id: number): void;
 }
@@ -169,4 +170,7 @@ interface Window {
   });
 
   window.overlay.onHide(() => document.body.classList.remove("visible"));
+  window.overlay.onTheme((theme) => {
+    document.documentElement.dataset.theme = theme;
+  });
 }

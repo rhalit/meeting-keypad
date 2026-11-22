@@ -98,3 +98,31 @@ export function glossaryCandidate(glossary: Glossary, term: string): TermCandida
   if (!e) return null;
   return { term, category: e.category, source: "mock" };
 }
+
+/** One entry of mock/scenarios/index.json. `path` is relative to mock/ ("." = the default meeting). */
+export interface ScenarioInfo {
+  id: string;
+  title: string;
+  usage: "meeting" | "education";
+  path: string;
+}
+
+/** Reads and checks mock/scenarios/index.json (ids unique, usage meeting / education). */
+export function loadScenarioIndex(path: string): ScenarioInfo[] {
+  const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!Array.isArray(raw)) throw new Error(`${path}: expected an array of scenarios`);
+  const seen = new Set<string>();
+  return raw.map((e, i) => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    const ok =
+      typeof o.id === "string" &&
+      o.id !== "" &&
+      typeof o.title === "string" &&
+      typeof o.path === "string" &&
+      (o.usage === "meeting" || o.usage === "education");
+    if (!ok) throw new Error(`${path}: entry ${i} does not match {id, title, usage: meeting|education, path}`);
+    if (seen.has(o.id as string)) throw new Error(`${path}: duplicate id "${o.id}"`);
+    seen.add(o.id as string);
+    return { id: o.id, title: o.title, usage: o.usage, path: o.path } as ScenarioInfo;
+  });
+}

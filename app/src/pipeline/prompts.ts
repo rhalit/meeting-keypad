@@ -250,3 +250,89 @@ export function summaryMessages(lines: TranscriptLine[], listenerName?: string):
     { role: "user", content: `Transcript:\n${formatTranscript(lines)}` },
   ];
 }
+
+// --- Education mode: Explain simply (slot 8), Flashcard (slot 6), Quiz me (slot 7) --------------
+
+/** Streams 3 bullet lines, same shape as Catch-up so the same controller and card can show it. */
+export function explainSimplyMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean } = {}): ChatMessage[] {
+  const span = opts.away
+    ? "the part of the lecture from the moment they looked away until now"
+    : "the last two minutes of the lecture";
+  return [
+    {
+      role: "system",
+      content:
+        `You help a student${listenerName ? ` (${listenerName})` : ""} who lost the thread of a lecture. You get ${span}. ` +
+        "Explain what was just taught so a 15-year-old would understand. Reply with exactly three lines and nothing else:\n" +
+        "- Idea: <the main idea being taught, at most 18 words>\n" +
+        "- In plain words: <the same idea with no jargon, at most 25 words>\n" +
+        "- Example: <one concrete everyday example, at most 25 words>\n" +
+        "No intro, no closing, no extra formatting.",
+    },
+    { role: "user", content: `Lecture transcript:\n${formatTranscript(lines)}` },
+  ];
+}
+
+export interface FlashcardJson {
+  front: string;
+  back: string;
+}
+
+export const FLASHCARD_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    front: { type: "string", description: "A question or prompt, at most 15 words" },
+    back: { type: "string", description: "The answer, at most 30 words, plain English" },
+  },
+  required: ["front", "back"],
+  additionalProperties: false,
+};
+
+export function flashcardMessages(lines: TranscriptLine[], avoid: string[]): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You turn the most important idea of a short lecture excerpt into ONE flashcard for spaced repetition. " +
+        "Return JSON with: front (a clear question that tests understanding, not a yes/no question, at most 15 words) and " +
+        "back (the answer in plain English, at most 30 words, understandable on its own weeks later). " +
+        "Use only what the lecture says." +
+        (avoid.length ? ` Do not repeat a card the student already has: ${avoid.map((a) => `"${a}"`).join("; ")}.` : ""),
+    },
+    { role: "user", content: `Lecture excerpt:\n${formatTranscript(lines)}` },
+  ];
+}
+
+export interface QuizJson {
+  question: string;
+  choices: string[];
+  answerIndex: number;
+  explanation: string;
+}
+
+export const QUIZ_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    question: { type: "string", description: "One question about the excerpt, at most 20 words" },
+    choices: { type: "array", items: { type: "string" }, description: "Exactly 3 short answer options" },
+    answerIndex: { type: "number", description: "Index (0, 1 or 2) of the correct choice" },
+    explanation: { type: "string", description: "Why that answer is right, at most 30 words" },
+  },
+  required: ["question", "choices", "answerIndex", "explanation"],
+  additionalProperties: false,
+};
+
+export function quizMessages(lines: TranscriptLine[], avoid: string[]): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You quiz a student on a lecture excerpt to practise recall. Return JSON with: question (one question that checks " +
+        "understanding of something the lecture explained, at most 20 words), choices (exactly 3 short options, only one " +
+        "correct, wrong ones plausible), answerIndex (0, 1 or 2), explanation (why the answer is right, at most 30 words, " +
+        "plain English). Use only what the lecture says." +
+        (avoid.length ? ` Ask about something else than: ${avoid.map((a) => `"${a}"`).join("; ")}.` : ""),
+    },
+    { role: "user", content: `Lecture excerpt:\n${formatTranscript(lines)}` },
+  ];
+}

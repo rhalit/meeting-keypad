@@ -209,7 +209,8 @@ namespace Loupedeck.MeetingKeysPlugin
                         GetString(k, "label") ?? "",
                         GetString(k, "sub"),
                         GetString(k, "color"),
-                        GetString(k, "state") ?? "shown"));
+                        GetString(k, "state") ?? "shown",
+                        GetString(k, "bg")));
                 }
 
                 this._store.Apply(states);

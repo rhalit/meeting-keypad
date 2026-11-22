@@ -61,6 +61,16 @@ summary (one call, skipped < 30 s said, reused when nothing new), questions, sav
 (opened marked), catch-ups, transcript). Runs on the panel button, Stop listening and the end of the mock meeting (each
 reveals the file in Finder) and silently on a Mock/Live switch. `MeetingRecord` (`meetingRecord.ts`) keeps start time,
 spoken seconds and the terms that reached a key.
+Education mode: panel switch Meeting / Education (`usage`, separate from Mock / Live). Education bottom row:
+6 Flashcard (`FlashcardController`, `education.ts`, appends to `output/flashcards.csv`, Anki CSV), 7 Quiz me
+(`QuizController`, 3 choices, the key reads "Answer" until pressed again), 8 Explain simply (a `CatchUpController` with
+`slot: 8` and `explainSimplyMessages`; gets the camera "Missed" span in Education mode). `SlotManager.setActionKeys`
+switches the layout; For-me still runs (away pulse) but does not draw slot 8 in Education. Mock content: `mock/scenarios/index.json`
+lists the scenarios `{id, title, usage, path}` (path relative to `mock/`, "." = the default meeting); Settings → Scenario
+picks one per mode (`mockSource.load`, saved in settings). New scenario = a folder with `meeting.json` + `glossary.json`
+following the same rules as the default (checked by `test/mockScenarios.test.ts`) and an index entry.
+Panel Settings (⚙): Source, Mode, Scenario, Theme (panel + overlay card), key backgrounds (protocol `bg`, the plugin
+switches to dark text on light colours); stored in Electron userData `settings.json` (`settings.ts`).
 Camera focus: `GazeClient` (`app/src/pipeline/gazeSource.ts`) reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`,
 MX Brio), `FocusTracker` (`focus.ts`) turns it into focused / away (debounced) and away periods. Back from away →
 Catch-up (slot 6) reads `Missed 2m` (amber) and summarises from when you looked away (`catchUp.setMissed`). A "For me?"

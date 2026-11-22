@@ -1,0 +1,200 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Laura",
+    "text": "Welcome to the Q3 business review. Marc, the numbers first.",
+    "terms": []
+  },
+  {
+    "t": 5.0,
+    "speaker": "Marc",
+    "text": "Good quarter. Our ARR passed twelve million, up forty percent on last year.",
+    "terms": [
+      "ARR"
+    ]
+  },
+  {
+    "t": 13.0,
+    "speaker": "Laura",
+    "text": "How much of that came from existing customers?",
+    "terms": []
+  },
+  {
+    "t": 17.0,
+    "speaker": "Marc",
+    "text": "A lot. NRR is at one hundred and eighteen percent, so current customers grow their spend every year.",
+    "terms": [
+      "NRR"
+    ]
+  },
+  {
+    "t": 26.0,
+    "speaker": "Marc",
+    "text": "Gross margin dropped to seventy-one percent because of higher hosting costs.",
+    "terms": [
+      "gross margin"
+    ]
+  },
+  {
+    "t": 34.0,
+    "speaker": "Laura",
+    "text": "And profitability?",
+    "terms": []
+  },
+  {
+    "t": 37.0,
+    "speaker": "Marc",
+    "text": "EBITDA is still negative, minus two million, but better than planned.",
+    "terms": [
+      "EBITDA"
+    ]
+  },
+  {
+    "t": 45.0,
+    "speaker": "Sam",
+    "text": "On sales, the CAC payback is fourteen months, down from nineteen.",
+    "terms": [
+      "CAC payback"
+    ]
+  },
+  {
+    "t": 53.0,
+    "speaker": "Laura",
+    "text": "Explain that for everyone, Sam.",
+    "terms": []
+  },
+  {
+    "t": 56.0,
+    "speaker": "Sam",
+    "text": "It's how long a new customer takes to pay back what we spent to win them.",
+    "terms": []
+  },
+  {
+    "t": 63.0,
+    "speaker": "Marc",
+    "text": "And with an LTV of about ninety thousand euros per customer, each deal is clearly worth it.",
+    "terms": [
+      "LTV"
+    ]
+  },
+  {
+    "t": 72.0,
+    "speaker": "Sam",
+    "text": "For Q4 we have three times pipeline coverage, so I'm confident about the target.",
+    "terms": [
+      "pipeline coverage"
+    ]
+  },
+  {
+    "t": 80.0,
+    "speaker": "Laura",
+    "text": "Good. Let's make sure finance and sales use the same numbers.",
+    "terms": []
+  },
+  {
+    "t": 85.0,
+    "speaker": "Laura",
+    "text": "{listener}, could you build one shared dashboard for revenue and deals in progress by next Monday?",
+    "terms": []
+  },
+  {
+    "t": 93.0,
+    "speaker": "Marc",
+    "text": "Thank you. Now the bigger picture.",
+    "terms": []
+  },
+  {
+    "t": 97.0,
+    "speaker": "Laura",
+    "text": "The market is moving fast. Our TAM in Europe alone is about four billion euros.",
+    "terms": [
+      "TAM"
+    ]
+  },
+  {
+    "t": 106.0,
+    "speaker": "Sam",
+    "text": "So we're barely scratching the surface.",
+    "terms": []
+  },
+  {
+    "t": 110.0,
+    "speaker": "Laura",
+    "text": "That's why the board wants to raise a Series B early next year.",
+    "terms": [
+      "Series B"
+    ]
+  },
+  {
+    "t": 118.0,
+    "speaker": "Marc",
+    "text": "Raising thirty million at our valuation means about eighteen percent dilution for current shareholders.",
+    "terms": [
+      "dilution"
+    ]
+  },
+  {
+    "t": 128.0,
+    "speaker": "Sam",
+    "text": "What would the money go to?",
+    "terms": []
+  },
+  {
+    "t": 132.0,
+    "speaker": "Laura",
+    "text": "Mostly sales in Germany and the Nordics, and a bigger support team.",
+    "terms": []
+  },
+  {
+    "t": 138.0,
+    "speaker": "Marc",
+    "text": "Before that, we need to control OpEx: costs grew faster than revenue this quarter.",
+    "terms": [
+      "OpEx"
+    ]
+  },
+  {
+    "t": 147.0,
+    "speaker": "Laura",
+    "text": "Then no new tools or contractors without approval until December.",
+    "terms": []
+  },
+  {
+    "t": 153.0,
+    "speaker": "Marc",
+    "text": "Investors will look closely at our unit economics, so every euro has to show a return.",
+    "terms": [
+      "unit economics"
+    ]
+  },
+  {
+    "t": 162.0,
+    "speaker": "Sam",
+    "text": "Our biggest deals are fine; it's the small customers that cost us money to serve.",
+    "terms": []
+  },
+  {
+    "t": 169.0,
+    "speaker": "Laura",
+    "text": "Then let's raise the minimum contract size next quarter.",
+    "terms": []
+  },
+  {
+    "t": 175.0,
+    "speaker": "Marc",
+    "text": "I'll model the impact on cancellations before we decide.",
+    "terms": []
+  },
+  {
+    "t": 180.0,
+    "speaker": "Laura",
+    "text": "{listener}, can you prepare a one-page summary of these numbers for the board meeting on the fifteenth?",
+    "terms": []
+  },
+  {
+    "t": 189.0,
+    "speaker": "Laura",
+    "text": "Thanks, everyone. Strong quarter, now let's keep the discipline.",
+    "terms": []
+  }
+]

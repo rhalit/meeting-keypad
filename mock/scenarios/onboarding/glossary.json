@@ -1,0 +1,92 @@
+{
+  "SSO": {
+    "full": "Single sign-on",
+    "explanation": "A login system where one company account and password give you access to all your work tools. You sign in once, usually on a company login page, and every connected app trusts that login. It saves you from juggling dozens of passwords and lets IT switch off all your access at once if needed.",
+    "example": "so you only have one password to remember",
+    "category": "Tech"
+  },
+  "MFA": {
+    "full": "Multi-factor authentication",
+    "explanation": "A login check that asks for a second proof of identity on top of your password, such as a code or a tap in an app on your phone. Even if someone steals your password, they still cannot get in without your phone. Most companies now require it for every work account.",
+    "example": "you'll approve each new login on your phone",
+    "category": "Tech"
+  },
+  "VPN": {
+    "full": "Virtual private network",
+    "explanation": "A secure, encrypted tunnel between your computer and the company network over the normal internet. When it is on, your laptop behaves as if it were in the office, so internal tools open, and nobody on the café or home wifi can read your traffic. You usually switch it on with one click.",
+    "example": "connect to the VPN before opening any internal tool",
+    "category": "Tech"
+  },
+  "least privilege": {
+    "full": "Principle of least privilege",
+    "explanation": "A security rule that gives each person only the access their job actually needs, and nothing more. New employees start with a basic set of rights and ask for more when a task requires it. If an account is ever hacked, the damage stays small because that account cannot reach everything.",
+    "example": "you get access to what your role needs",
+    "category": "Tech"
+  },
+  "phishing simulation": {
+    "full": "Phishing simulation",
+    "explanation": "A fake scam email that the company's own security team sends to employees on purpose. It looks like a real attack, for example a message asking you to log in or open an invoice. Clicking it does no harm but leads to a short lesson, so people learn to spot real phishing before it costs anything.",
+    "example": "We run a phishing simulation every month",
+    "category": "Tech"
+  },
+  "GDPR": {
+    "full": "General Data Protection Regulation",
+    "explanation": "The European Union law that protects people's personal data, such as names, emails or purchase history. Companies must collect only what they need, keep it safe, explain how they use it and delete it on request. Breaking the rules can lead to fines of up to four percent of a company's yearly worldwide revenue.",
+    "example": "all customer data falls under GDPR",
+    "category": "Law"
+  },
+  "DPO": {
+    "full": "Data Protection Officer",
+    "explanation": "The person in a company responsible for making sure personal data is handled legally, under rules such as GDPR. They advise teams on what they may collect, store or share, answer customers' questions about their data, and are the contact for the data protection authorities. Ask them whenever you are unsure.",
+    "example": "ask our DPO before sharing anything outside the company",
+    "category": "Law"
+  },
+  "PTO": {
+    "full": "Paid time off",
+    "explanation": "The days off work you are paid for, such as holidays and personal days, counted together in one balance. You usually request them in an HR tool, and your manager approves them. Some companies include sick days in the same balance, while others track them separately. Unused days may or may not carry over.",
+    "example": "Holidays are booked as PTO in the HR portal",
+    "category": "Business"
+  },
+  "OKR": {
+    "full": "Objectives and key results",
+    "explanation": "A goal-setting method used by many companies. Each team picks a few ambitious objectives for the quarter and, for each one, two to four key results: measurable numbers that show whether the objective was reached. The goals are usually visible to the whole company, so people can see how their work fits in.",
+    "example": "Every quarter we set OKRs",
+    "category": "Business"
+  },
+  "KPI": {
+    "full": "Key performance indicator",
+    "explanation": "A number a team watches regularly to see whether things are going well, such as how fast customers get an answer or how satisfied they are. Good indicators are few, easy to measure and tied to what really matters. They often appear on dashboards and in weekly or monthly reviews.",
+    "example": "Progress is tracked with a few KPIs",
+    "category": "Business"
+  },
+  "SLA": {
+    "full": "Service level agreement",
+    "explanation": "A written promise to a customer about the quality of a service, for example that critical problems get an answer within one hour or that the system is available 99.9 percent of the time. If the company misses the promised level, the contract often gives the customer a discount or other compensation.",
+    "example": "we must answer critical tickets within one hour",
+    "category": "Business"
+  },
+  "on-call rotation": {
+    "full": "On-call rotation",
+    "explanation": "A schedule that shares out who must be reachable outside normal working hours to deal with urgent problems, such as a system going down at night. Team members take turns, often one week each, and are usually paid extra for it. The person on call gets an alert on their phone when something breaks.",
+    "example": "we have an on-call rotation for nights and weekends",
+    "category": "Tech"
+  },
+  "postmortem": {
+    "full": "Blameless postmortem",
+    "explanation": "A short written review after something went wrong, such as an outage. It describes what happened, why it happened and what will change so it does not happen again. Blameless means it looks at systems and processes rather than at who made the mistake, so people can be honest without fear.",
+    "example": "what happened, why, and how we prevent it, without pointing fingers",
+    "category": "Business"
+  },
+  "RACI": {
+    "full": "Responsible, Accountable, Consulted, Informed",
+    "explanation": "A simple table that makes clear who does what on a project. For each task it marks who does the work, who makes the final decision, who must be asked for an opinion and who just needs to be kept informed. It prevents confusion when several teams work on the same thing.",
+    "example": "who decides and who just needs to know",
+    "category": "Business"
+  },
+  "all-hands": {
+    "full": "All-hands meeting",
+    "explanation": "A meeting for the whole company, often held monthly or quarterly. Leaders share results, plans and big news, and employees can usually ask questions, sometimes anonymously. It helps everyone, especially new people, understand where the company is going and how their own team fits into the bigger picture.",
+    "example": "the leadership shares results and answers questions",
+    "category": "Business"
+  }
+}

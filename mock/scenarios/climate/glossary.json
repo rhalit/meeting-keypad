@@ -1,0 +1,86 @@
+{
+  "greenhouse effect": {
+    "full": "Greenhouse effect",
+    "explanation": "The natural warming of the Earth caused by gases in the air, such as carbon dioxide and water vapour, that let sunlight in but hold back part of the heat the ground gives off. Without it the planet would be frozen. Adding more of these gases makes the effect stronger, which warms the climate.",
+    "example": "some gases trap the heat the Earth sends back towards space",
+    "category": "Science"
+  },
+  "ppm": {
+    "full": "Parts per million",
+    "explanation": "A unit for very small concentrations: how many molecules of a substance there are in every million molecules of air or water. Carbon dioxide has risen from about 280 parts per million before industry to over 420 today. Small as these numbers look, they make a large difference to the climate.",
+    "example": "about 280 ppm before the industrial era",
+    "category": "Science"
+  },
+  "carbon sink": {
+    "full": "Carbon sink",
+    "explanation": "Anything that absorbs more carbon dioxide from the air than it releases, such as forests, soils and oceans. Today they soak up roughly half of human emissions, slowing climate change. But they can weaken: forests that burn or dry out, and warmer oceans, absorb less and can even start releasing carbon.",
+    "example": "We call them carbon sinks",
+    "category": "Science"
+  },
+  "ocean acidification": {
+    "full": "Ocean acidification",
+    "explanation": "The slow drop in the ocean's pH as seawater absorbs carbon dioxide from the air and forms a weak acid. More acidic water makes it harder for corals, oysters, mussels and some plankton to build their shells and skeletons, which threatens reefs, fisheries and the food chains that depend on them.",
+    "example": "harms corals and shellfish",
+    "category": "Science"
+  },
+  "albedo": {
+    "full": "Albedo",
+    "explanation": "How much sunlight a surface reflects instead of absorbing. Fresh snow and ice reflect most of it and stay cool, while dark ocean, forests and asphalt absorb most of it and warm up. When ice melts and reveals darker surfaces, more heat is absorbed, which speeds up warming.",
+    "example": "Ice reflects sunlight, while dark ocean water absorbs it",
+    "category": "Science"
+  },
+  "feedback loop": {
+    "full": "Climate feedback loop",
+    "explanation": "A chain of effects where a change causes something that strengthens or weakens the original change. In a reinforcing loop, warming melts ice, which exposes dark water, which causes more warming. Such loops can make climate change speed up, which is why scientists watch them closely.",
+    "example": "Less ice means more warming, which melts more ice",
+    "category": "Science"
+  },
+  "permafrost": {
+    "full": "Permafrost",
+    "explanation": "Ground that stays frozen all year round, sometimes for thousands of years, mostly in the Arctic. It holds huge amounts of old plant material. As it thaws, microbes break that material down and release carbon dioxide and methane, which warm the planet further, and the thawing ground also damages roads and buildings.",
+    "example": "thawing permafrost releases methane",
+    "category": "Science"
+  },
+  "methane": {
+    "full": "Methane",
+    "explanation": "A gas released by cattle, rice fields, landfills, gas leaks and thawing frozen ground. It stays in the air for only about a decade but traps over eighty times more heat than carbon dioxide over twenty years. Cutting its leaks is one of the fastest ways to slow warming in the short term.",
+    "example": "a very powerful greenhouse gas",
+    "category": "Science"
+  },
+  "tipping point": {
+    "full": "Climate tipping point",
+    "explanation": "A threshold beyond which a part of the climate system shifts into a new state that keeps going on its own and is very hard to reverse, such as the loss of large ice sheets or the drying of the Amazon rainforest. Crossing one can trigger others, which is why scientists urge staying well below them.",
+    "example": "thresholds after which a change continues on its own",
+    "category": "Science"
+  },
+  "IPCC": {
+    "full": "Intergovernmental Panel on Climate Change",
+    "explanation": "The United Nations body that assesses the science of climate change. Thousands of scientists review the published research and summarise what is known, how confident they are and what the options are. Its reports, approved by governments, are the main scientific basis for international climate agreements such as the Paris Agreement.",
+    "example": "the UN's climate science panel",
+    "category": "Science"
+  },
+  "carbon budget": {
+    "full": "Carbon budget",
+    "explanation": "The total amount of carbon dioxide humanity can still emit while keeping warming below a chosen limit, such as 1.5 degrees. It works like a bank balance: every year of emissions spends part of it. At current emission levels, the budget for 1.5 degrees would be used up within a few years.",
+    "example": "how much more carbon dioxide we can emit before we pass that limit",
+    "category": "Science"
+  },
+  "net zero": {
+    "full": "Net zero emissions",
+    "explanation": "A state where the greenhouse gases a country or company still emits are fully balanced by the amount removed from the air, for example by forests or machines. Getting there means cutting emissions as much as possible first, then removing the rest. Many countries aim to reach it by 2050.",
+    "example": "talk about net zero by 2050",
+    "category": "Science"
+  },
+  "carbon capture": {
+    "full": "Carbon capture and storage",
+    "explanation": "Technology that traps carbon dioxide, either from factory chimneys before it escapes or directly from the air, and stores it deep underground or uses it in products. It can help with emissions that are hard to avoid, but today it is expensive and only removes a tiny fraction of global emissions.",
+    "example": "carbon capture machines that pull it out directly",
+    "category": "Tech"
+  },
+  "carbon footprint": {
+    "full": "Carbon footprint",
+    "explanation": "The total greenhouse gases caused by a person, product or company, usually expressed in tonnes of carbon dioxide per year. For a person it includes travel, home energy, food and the things they buy. Knowing it helps people see which changes, such as flying less or eating less meat, would make the biggest difference.",
+    "example": "the emissions caused by how you live",
+    "category": "Other"
+  }
+}

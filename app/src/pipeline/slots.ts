@@ -2,16 +2,18 @@ import { EventEmitter } from "node:events";
 import type { Clock, TimerHandle } from "./clock.js";
 import {
   ACTION_KEYS,
+  type ActionKeyMap,
   CATEGORY_COLORS,
   SLOT_COUNT,
   TERM_SLOTS,
-  actionKey,
+  actionKeyIn,
   displayTerm,
   emptyKey,
   isValidSlot,
   type KeyState,
   type SlotState,
 } from "./protocol.js";
+import type { KeyBackgrounds } from "./settings.js";
 import { normalizeTerm, type TermCandidate } from "./terms.js";
 
 export interface SlotManagerOptions {
@@ -92,6 +94,8 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
   private pumpTimer: TimerHandle | null = null;
   private overrides = new Map<number, ActionOverride>();
   private flash: boolean | null = null;
+  private actionKeys: ActionKeyMap = ACTION_KEYS;
+  private backgrounds: KeyBackgrounds = {};
   /** Layout just before the last shift, and when it happened. */
   private beforeShift: (Placed | null)[] | null = null;
   private shiftAt = -Infinity;
@@ -117,7 +121,7 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
 
   press(slot: number): PressResult {
     if (!isValidSlot(slot)) return { kind: "invalid", slot };
-    if (slot >= TERM_SLOTS) return { kind: "action", slot, action: ACTION_KEYS[slot].name };
+    if (slot >= TERM_SLOTS) return { kind: "action", slot, action: this.actionKeys[slot].name };
     const inGrace = this.beforeShift !== null && this.clock.now() - this.shiftAt < this.pressGraceMs;
     // In the grace period the user aimed at what was there before the shift; an empty key had nothing to aim at.
     const p = (inGrace ? this.beforeShift![slot] : null) ?? this.slots[slot];
@@ -137,6 +141,20 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
     if (override) this.overrides.set(slot, { ...override });
     else if (!this.overrides.delete(slot)) return;
     this.emit("change", [this.keyState(slot)]);
+  }
+
+  /** User key backgrounds (panel Settings): `terms` for keys 0-5, "6" / "7" / "8" for the bottom row. Sends all 9. */
+  setBackgrounds(bg: KeyBackgrounds): void {
+    this.backgrounds = { ...bg };
+    this.emit("change", this.getAll());
+  }
+
+  /** Switch the bottom row (Meeting / Education mode). Clears action overrides; sends slots 6-8. */
+  setActionKeys(keys: ActionKeyMap): void {
+    if (keys === this.actionKeys) return;
+    this.actionKeys = keys;
+    this.overrides.clear();
+    this.emit("change", [6, 7, 8].map((s) => this.keyState(s)));
   }
 
   setFlash(phase: boolean | null): void {
@@ -247,11 +265,14 @@ export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
   private keyState(slot: number): KeyState {
     const base = this.baseKeyState(slot);
     // In `alert`, color is the background (protocol v2), so a term key's category colour must not leak in.
-    return this.flash === true ? { ...base, color: FLASH_RED, state: "alert" } : base;
+    if (this.flash === true) return { ...base, color: FLASH_RED, state: "alert" };
+    if (base.state === "empty" || base.state === "alert") return base;
+    const bg = slot < TERM_SLOTS ? this.backgrounds.terms : this.backgrounds[String(slot) as "6" | "7" | "8"];
+    return bg && bg !== "#000000" ? { ...base, bg } : base;
   }
 
   private baseKeyState(slot: number): KeyState {
-    if (slot >= TERM_SLOTS) return { ...actionKey(slot), ...this.overrides.get(slot) };
+    if (slot >= TERM_SLOTS) return { ...actionKeyIn(this.actionKeys, slot), ...this.overrides.get(slot) };
     const p = this.slots[slot];
     if (!p) return emptyKey(slot);
     const { term, category } = p.candidate;

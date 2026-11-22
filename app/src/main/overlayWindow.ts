@@ -28,6 +28,7 @@ export class OverlayWindow {
   private currentId: number | null = null;
   private revealedId: number | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private theme: string = "dark";
 
   constructor(private readonly opts: OverlayWindowOptions) {
     const isMac = process.platform === "darwin";
@@ -66,6 +67,7 @@ export class OverlayWindow {
     ipcMain.on("overlay:shown", this.onShownMsg);
     this.win.webContents.once("did-finish-load", () => {
       this.loaded = true;
+      this.win.webContents.send("overlay:theme", this.theme);
       if (this.pending) this.show(this.pending);
       this.pending = null;
     });
@@ -83,6 +85,12 @@ export class OverlayWindow {
     }
     this.currentId = card.id;
     this.win.webContents.send("overlay:card", card);
+  }
+
+  /** "dark" or "light" (panel Settings). Applied now, or as soon as the page has loaded. */
+  setTheme(theme: string): void {
+    this.theme = theme;
+    if (this.loaded && !this.win.isDestroyed()) this.win.webContents.send("overlay:theme", theme);
   }
 
   /** Same card id with new content (text card filling in). */

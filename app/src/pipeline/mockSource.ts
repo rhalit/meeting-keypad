@@ -21,7 +21,7 @@ export interface PlaybackState {
  * `restart`, `end`.
  */
 export class MockSource extends EventEmitter {
-  private readonly lines: MeetingLine[];
+  private lines: MeetingLine[];
   private playing = false;
   private speed: Speed = 1;
   private pos = 0; // meeting seconds at `anchor`
@@ -31,7 +31,7 @@ export class MockSource extends EventEmitter {
 
   constructor(
     lines: MeetingLine[],
-    private readonly glossary: Glossary,
+    private glossary: Glossary,
     private readonly clock: Clock,
   ) {
     super();
@@ -75,6 +75,13 @@ export class MockSource extends EventEmitter {
     this.playing = false;
     this.clearTimer();
     this.emitState();
+  }
+
+  /** Another meeting (Meeting / Education mode): rewinds to 0, paused. Emits `state`. */
+  load(lines: MeetingLine[], glossary: Glossary): void {
+    this.lines = [...lines].sort((a, b) => a.t - b.t);
+    this.glossary = glossary;
+    this.rewind();
   }
 
   /** Back to 0, paused (switching to Live). Emits `state`, not `restart`. */

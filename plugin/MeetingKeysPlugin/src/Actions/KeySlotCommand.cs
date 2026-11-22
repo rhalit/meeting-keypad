@@ -24,6 +24,8 @@ namespace Loupedeck.MeetingKeysPlugin
         private static readonly BitmapColor AlertBg = new(0xE5, 0x48, 0x4D);
         private static readonly BitmapColor SeenText = new(0x50, 0x57, 0x60); // dark enough to read as "opened" on the LCD
         private static readonly BitmapColor DefaultAccent = new(0x8B, 0x94, 0x9E);
+        private static readonly BitmapColor DarkText = new(0x11, 0x11, 0x11);
+        private static readonly BitmapColor SeenTextOnLight = new(0x8B, 0x94, 0x9E);
 
         private const Int32 BorderWidth = 2;
 
@@ -122,16 +124,25 @@ namespace Loupedeck.MeetingKeysPlugin
                 return b.ToImage();
             }
 
+            // User background (protocol `bg`); on a light one, the white texts turn near-black.
+            var bg = ParseHex(s.Bg);
+            var light = bg.HasValue && Luminance(bg.Value) > 0.55;
+            if (bg.HasValue)
+            {
+                b.Clear(bg.Value);
+            }
+
+            var main = light ? DarkText : BitmapColor.White;
             var accent = ParseHex(s.Color) ?? DefaultAccent;
             var hasCategory = !String.IsNullOrEmpty(s.Sub);
             var label = s.Label ?? "";
-            var textColor = hasCategory ? BitmapColor.White : (ParseHex(s.Color) ?? BitmapColor.White);
+            var textColor = hasCategory ? main : (ParseHex(s.Color) ?? main);
             var categoryColor = accent;
 
             switch (s.State)
             {
                 case "seen":
-                    textColor = SeenText;
+                    textColor = light ? SeenTextOnLight : SeenText;
                     categoryColor = Dim(accent, 0.5);
                     break;
                 case "busy":
@@ -162,7 +173,7 @@ namespace Loupedeck.MeetingKeysPlugin
             }
 
             PluginLog.Info(
-                $"Draw slot {slot}: state={s.State} label={label.Replace("\n", "\\n")} sub={s.Sub ?? "-"} color={s.Color ?? "-"} " +
+                $"Draw slot {slot}: state={s.State} label={label.Replace("\n", "\\n")} sub={s.Sub ?? "-"} color={s.Color ?? "-"} bg={s.Bg ?? "-"} " +
                 $"{b.Width}x{b.Height} font {fit.FontSize}px lines=[{String.Join(" | ", fit.Lines)}]{(fit.Abbreviated ? " abbreviated" : "")}");
             return b.ToImage();
         }
@@ -213,6 +224,18 @@ namespace Loupedeck.MeetingKeysPlugin
             }
 
             return null;
+        }
+
+        // Relative luminance (sRGB, 0 = black, 1 = white).
+        private static Double Luminance(BitmapColor c)
+        {
+            static Double Lin(Int32 v)
+            {
+                var x = v / 255.0;
+                return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4);
+            }
+
+            return (0.2126 * Lin(c.R)) + (0.7152 * Lin(c.G)) + (0.0722 * Lin(c.B));
         }
 
         private static BitmapColor Dim(BitmapColor c, Double factor) =>

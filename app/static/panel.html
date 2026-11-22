@@ -8,9 +8,44 @@
   </head>
   <body>
     <header>
-      <div class="modes" role="tablist">
-        <button id="mode-mock" class="active">Mock meeting</button><button id="mode-live">Live meeting</button>
+      <div class="topbar">
+        <span id="summary" class="summary">Mock · Meeting</span>
+        <button id="settings-btn" title="Source, mode, theme and key colours">⚙ Settings</button>
       </div>
+      <section id="settings" class="settings" hidden>
+        <div class="setting">
+          <span class="setting-name">Source</span>
+          <div class="modes" role="tablist">
+            <button id="mode-mock" class="active">Mock</button><button id="mode-live">Live</button>
+          </div>
+        </div>
+        <div class="setting">
+          <span class="setting-name">Mode</span>
+          <div class="modes" role="tablist" title="Meeting: Catch-up · Save · For me?   Education: Flashcard · Quiz me · Explain simply">
+            <button id="usage-meeting" class="active">Meeting</button><button id="usage-education">Education</button>
+          </div>
+        </div>
+        <div class="setting">
+          <span class="setting-name">Scenario</span>
+          <select id="scenario" title="Mock content for this mode"></select>
+        </div>
+        <div class="setting">
+          <span class="setting-name">Theme</span>
+          <div class="modes" role="tablist">
+            <button id="theme-dark" class="active">Dark</button><button id="theme-light">Light</button>
+          </div>
+        </div>
+        <div class="setting top">
+          <span class="setting-name">Key backgrounds</span>
+          <div class="colors">
+            <label class="color"><input id="bg-terms" type="color" value="#000000" /><span>Term keys (1–6)</span></label>
+            <label class="color"><input id="bg-6" type="color" value="#000000" /><span id="bg-6-name">Bottom left</span></label>
+            <label class="color"><input id="bg-7" type="color" value="#000000" /><span id="bg-7-name">Bottom middle</span></label>
+            <label class="color"><input id="bg-8" type="color" value="#000000" /><span id="bg-8-name">Bottom right</span></label>
+            <button id="bg-reset">Reset to black</button>
+          </div>
+        </div>
+      </section>
       <div id="mock-controls" class="controls">
         <button id="play" class="primary">Play</button>
         <button id="restart">Restart</button>

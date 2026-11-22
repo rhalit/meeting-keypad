@@ -1,6 +1,7 @@
 import type { Clock, TimerHandle } from "./clock.js";
 import { DEFAULT_TIMEOUT_MS, LlmError, errorAdvice, toLlmError, withTimeout, type LlmClient } from "./llm.js";
 import type { OverlayController } from "./overlay.js";
+import type { ChatMessage } from "./llm.js";
 import { catchUpMessages } from "./prompts.js";
 import type { ActionKeys } from "./slots.js";
 import type { TranscriptLine } from "./transcriptBuffer.js";
@@ -44,6 +45,12 @@ export interface CatchUpOptions {
   /** Reported after every real LLM call (panel status). */
   onLlmOutcome?: (o: LlmOutcome) => void;
   listenerName?: string;
+  /** The key it lives on (6 = Catch-up in Meeting mode, 8 = Explain simply in Education mode). */
+  slot?: number;
+  /** Name on cards and in the log, e.g. "Catch-up" or "Explain simply". */
+  name?: string;
+  /** Builds the model prompt (default: the 3-line meeting catch-up). */
+  messages?: (lines: TranscriptLine[], listenerName: string | undefined, opts: { away: boolean }) => ChatMessage[];
   windowS?: number;
   minSpokenS?: number;
   timeoutMs?: number;
@@ -89,6 +96,8 @@ interface Run {
 export class CatchUpController {
   private readonly o: Required<Omit<CatchUpOptions, "onLlmOutcome" | "listenerName">> &
     Pick<CatchUpOptions, "onLlmOutcome" | "listenerName">;
+  /** Lower-case name for log lines. */
+  private readonly tag: string;
   private run: Run | null = null;
   private readonly inFlight = new Set<Promise<void>>();
   private cardId: number | null = null;
@@ -114,14 +123,18 @@ export class CatchUpController {
       missedTtlMs: 300_000,
       missedMaxS: 900,
       cooldownMs: 10_000,
+      slot: CATCH_UP_SLOT,
+      name: "Catch-up",
+      messages: catchUpMessages,
       ...opts,
     };
+    this.tag = this.o.name.toLowerCase();
   }
 
   press(): CatchUpPress {
     const { overlay, log } = this.o;
     if (this.run) {
-      log("catch-up: still running, press ignored");
+      log(`${this.tag}: still running, press ignored`);
       return "ignored";
     }
     if (this.cardId !== null && overlay.isVisible(this.cardId) && !this.missed) {
@@ -132,19 +145,19 @@ export class CatchUpController {
     const latest = this.latestLineKey();
     // A missed span asks for a different summary (from when you looked away), so it skips the re-show guard.
     if (!this.missed && this.last && latest === this.last.lineKey) {
-      log("catch-up: press re-shows the last summary (no new line since it, no model call)");
+      log(`${this.tag}: press re-shows the last summary (no new line since it, no model call)`);
       this.reshow("nothing new");
       return "reshown";
     }
     const sinceCall = this.lastCallAt === null ? Infinity : this.o.clock.now() - this.lastCallAt;
     if (sinceCall < this.o.cooldownMs) {
       const left = Math.ceil((this.o.cooldownMs - sinceCall) / 1000);
-      log(`catch-up: press during the ${this.o.cooldownMs / 1000} s cooldown (${left} s left), no model call`);
+      log(`${this.tag}: press during the ${this.o.cooldownMs / 1000} s cooldown (${left} s left), no model call`);
       if (this.last && !this.missed) {
         this.reshow("last summary");
         return "reshown";
       }
-      this.cardId = overlay.showText({ eyebrow: "Catch-up", title: `Try again in ${left} s.`, durationMs: this.o.notMuchMs });
+      this.cardId = overlay.showText({ eyebrow: this.o.name, title: `Try again in ${left} s.`, durationMs: this.o.notMuchMs });
       return "cooldown";
     }
     const now = this.o.meetingTime();
@@ -155,20 +168,20 @@ export class CatchUpController {
       const lines = this.o.transcript.getLast(now - from, now);
       const span = longSpan(missed.to - missed.from);
       if (lines.length === 0) {
-        log("catch-up: nothing was said while you were away");
-        this.cardId = overlay.showText({ eyebrow: `Catch-up · away ${span}`, title: "Nothing was said while you were away.", durationMs: this.o.notMuchMs });
+        log(`${this.tag}: nothing was said while you were away`);
+        this.cardId = overlay.showText({ eyebrow: `${this.o.name} · away ${span}`, title: "Nothing was said while you were away.", durationMs: this.o.notMuchMs });
         return "not-much";
       }
-      const p = this.start(lines, `Catch-up · while you were away (${span})`, true);
+      const p = this.start(lines, `${this.o.name} · while you were away (${span})`, true);
       this.inFlight.add(p);
       void p.finally(() => this.inFlight.delete(p));
       return "started";
     }
     const lines = this.o.transcript.getLast(this.o.windowS, now);
     if (lines.length === 0 || now - lines[0].t < this.o.minSpokenS) {
-      log("catch-up: less than 15 s said, nothing to summarise");
+      log(`${this.tag}: less than 15 s said, nothing to summarise`);
       this.cardId = overlay.showText({
-        eyebrow: "Catch-up",
+        eyebrow: this.o.name,
         title: "Not much has been said yet.",
         durationMs: this.o.notMuchMs,
       });
@@ -196,10 +209,10 @@ export class CatchUpController {
     if (this.missedTimer !== null) this.o.clock.clearTimeout(this.missedTimer);
     this.missedTimer = this.o.clock.setTimeout(() => {
       this.missedTimer = null;
-      this.o.log("catch-up: missed span expired unpressed");
+      this.o.log(`${this.tag}: missed span expired unpressed`);
       this.clearMissed();
     }, this.o.missedTtlMs);
-    this.o.log(`catch-up: you missed ${longSpan(this.missed.to - this.missed.from)} (from ${this.missed.from.toFixed(0)} s)`);
+    this.o.log(`${this.tag}: you missed ${longSpan(this.missed.to - this.missed.from)} (from ${this.missed.from.toFixed(0)} s)`);
     this.refreshKey();
   }
 
@@ -239,16 +252,16 @@ export class CatchUpController {
   private refreshKey(): void {
     const m = this.missed;
     this.o.keys.setActionOverride(
-      CATCH_UP_SLOT,
+      this.o.slot,
       this.run ? { state: "busy" } : m ? { label: `Missed ${shortSpan(m.to - m.from)}`, color: MISSED_COLOR, state: "shown" } : null,
     );
   }
 
-  private async start(lines: TranscriptLine[], eyebrow = "Catch-up · last 2 min", away = false): Promise<void> {
+  private async start(lines: TranscriptLine[], eyebrow = `${this.o.name} · last 2 min`, away = false): Promise<void> {
     const { clock, llm, overlay, log } = this.o;
     const cardId = overlay.showText({
       eyebrow,
-      title: "Catch-up",
+      title: this.o.name,
       streaming: true,
       durationMs: null,
     });
@@ -259,14 +272,14 @@ export class CatchUpController {
     this.lastCallAt = run.startedAt;
     this.cardId = cardId;
     this.refreshKey();
-    log(`catch-up: ${lines.length} lines (${lines[0].t}-${lines[lines.length - 1].t} s) -> ${llm.describe()}`);
+    log(`${this.tag}: ${lines.length} lines (${lines[0].t}-${lines[lines.length - 1].t} s) -> ${llm.describe()}`);
     try {
       await withTimeout(
         clock,
         this.o.timeoutMs,
         async (signal) => {
           for await (const delta of llm.stream({
-            messages: catchUpMessages(lines, this.o.listenerName, { away }),
+            messages: this.o.messages(lines, this.o.listenerName, { away }),
             maxTokens: 700,
             temperature: 0.3,
             signal,
@@ -277,7 +290,7 @@ export class CatchUpController {
             if (run.firstAt === null) {
               run.firstAt = clock.now();
               const ms = run.firstAt - run.startedAt;
-              const msg = `catch-up: first token after ${ms} ms`;
+              const msg = `${this.tag}: first token after ${ms} ms`;
               log(ms > TTFT_TARGET_MS ? `WARNING: ${msg} (target ${TTFT_TARGET_MS} ms)` : msg);
               this.flush(run);
             } else if (run.flushTimer === null) {
@@ -297,19 +310,19 @@ export class CatchUpController {
       overlay.finishText(cardId, this.o.visibleMs, body);
       this.last = { body, lineKey };
       this.summaries.push({ t: at, body });
-      log(`catch-up: done in ${clock.now() - run.startedAt} ms`);
+      log(`${this.tag}: done in ${clock.now() - run.startedAt} ms`);
       this.o.onLlmOutcome?.({ ok: true });
     } catch (err) {
       if (this.run !== run) return; // cancel() took care of it
       this.clearFlush(run);
       const e = toLlmError(err);
       if (e.kind === "cancelled") {
-        log("catch-up: card was replaced, request stopped");
+        log(`${this.tag}: card was replaced, request stopped`);
         return;
       }
-      log(`catch-up failed: ${e.kind}: ${e.message}`);
+      log(`${this.tag} failed: ${e.kind}: ${e.message}`);
       this.cardId = overlay.showText({
-        eyebrow: "Catch-up failed",
+        eyebrow: `${this.o.name} failed`,
         title: "Couldn't catch up",
         body: errorAdvice(e),
         tone: "error",
@@ -335,8 +348,8 @@ export class CatchUpController {
   private reshow(why: string): void {
     if (!this.last) return;
     this.cardId = this.o.overlay.showText({
-      eyebrow: `Catch-up · ${why}`,
-      title: "Catch-up",
+      eyebrow: `${this.o.name} · ${why}`,
+      title: this.o.name,
       body: this.last.body,
       durationMs: this.o.visibleMs,
     });

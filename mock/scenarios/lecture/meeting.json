@@ -1,0 +1,268 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Prof. Martin",
+    "text": "Good morning everyone, welcome back to Learning Sciences, lecture four.",
+    "terms": []
+  },
+  {
+    "t": 4.0,
+    "speaker": "Prof. Martin",
+    "text": "Today is about one question: what actually happens in your brain when you learn something?",
+    "terms": []
+  },
+  {
+    "t": 9.0,
+    "speaker": "Prof. Martin",
+    "text": "The short answer is neuroplasticity: the brain physically rewires itself every time you practise.",
+    "terms": [
+      "neuroplasticity"
+    ]
+  },
+  {
+    "t": 15.0,
+    "speaker": "Jade",
+    "text": "So the brain is not fixed after childhood?",
+    "terms": []
+  },
+  {
+    "t": 19.0,
+    "speaker": "Prof. Martin",
+    "text": "Not at all. Connections keep changing your whole life, just a bit slower as you age.",
+    "terms": []
+  },
+  {
+    "t": 25.0,
+    "speaker": "Prof. Martin",
+    "text": "Every connection between two neurons is called a synapse, and learning makes the useful ones stronger.",
+    "terms": [
+      "synapse"
+    ]
+  },
+  {
+    "t": 32.0,
+    "speaker": "Leo",
+    "text": "How does a synapse actually get stronger?",
+    "terms": []
+  },
+  {
+    "t": 36.0,
+    "speaker": "Prof. Martin",
+    "text": "Through long-term potentiation: when two neurons fire together again and again, the link between them grows.",
+    "terms": [
+      "long-term potentiation"
+    ]
+  },
+  {
+    "t": 44.0,
+    "speaker": "Prof. Martin",
+    "text": "That's where the classic phrase comes from: neurons that fire together, wire together.",
+    "terms": []
+  },
+  {
+    "t": 50.0,
+    "speaker": "Jade",
+    "text": "And where are new memories stored at first?",
+    "terms": []
+  },
+  {
+    "t": 54.0,
+    "speaker": "Prof. Martin",
+    "text": "In the hippocampus, a small curved structure deep inside each side of the brain.",
+    "terms": [
+      "hippocampus"
+    ]
+  },
+  {
+    "t": 61.0,
+    "speaker": "Prof. Martin",
+    "text": "Think of it as a notebook: it writes things down quickly, but it can't keep them for long.",
+    "terms": []
+  },
+  {
+    "t": 67.0,
+    "speaker": "Leo",
+    "text": "So what moves them out of the notebook?",
+    "terms": []
+  },
+  {
+    "t": 71.0,
+    "speaker": "Prof. Martin",
+    "text": "Mostly sleep. During memory consolidation the brain replays the day and copies the important parts to the cortex.",
+    "terms": [
+      "memory consolidation"
+    ]
+  },
+  {
+    "t": 80.0,
+    "speaker": "Prof. Martin",
+    "text": "A lot of that replay happens in deep sleep, and REM sleep seems to help connect new ideas to old ones.",
+    "terms": [
+      "REM sleep"
+    ]
+  },
+  {
+    "t": 88.0,
+    "speaker": "Jade",
+    "text": "That explains why all-nighters before exams never work for me.",
+    "terms": []
+  },
+  {
+    "t": 93.0,
+    "speaker": "Prof. Martin",
+    "text": "Exactly. Without sleep you mostly lose what you crammed.",
+    "terms": []
+  },
+  {
+    "t": 98.0,
+    "speaker": "Prof. Martin",
+    "text": "{listener}, what do you think happens to a memory if you sleep less than six hours after studying?",
+    "terms": []
+  },
+  {
+    "t": 106.0,
+    "speaker": "Prof. Martin",
+    "text": "Good guess. Studies show people remember up to forty percent less.",
+    "terms": []
+  },
+  {
+    "t": 112.0,
+    "speaker": "Prof. Martin",
+    "text": "Now, your brain can only juggle a few things at once. That limit is your working memory.",
+    "terms": [
+      "working memory"
+    ]
+  },
+  {
+    "t": 120.0,
+    "speaker": "Leo",
+    "text": "How many things can it hold?",
+    "terms": []
+  },
+  {
+    "t": 124.0,
+    "speaker": "Prof. Martin",
+    "text": "About four chunks of information at a time, which is why long slides with ten bullet points don't stick.",
+    "terms": []
+  },
+  {
+    "t": 131.0,
+    "speaker": "Prof. Martin",
+    "text": "When working memory is overloaded, we call it high cognitive load, and learning almost stops.",
+    "terms": [
+      "cognitive load"
+    ]
+  },
+  {
+    "t": 139.0,
+    "speaker": "Jade",
+    "text": "So what's the best way to study, then?",
+    "terms": []
+  },
+  {
+    "t": 143.0,
+    "speaker": "Prof. Martin",
+    "text": "Two techniques beat everything else. The first one is retrieval practice.",
+    "terms": [
+      "retrieval practice"
+    ]
+  },
+  {
+    "t": 150.0,
+    "speaker": "Prof. Martin",
+    "text": "Instead of rereading your notes, you close the book and try to recall the answer from memory.",
+    "terms": []
+  },
+  {
+    "t": 157.0,
+    "speaker": "Leo",
+    "text": "Like flashcards?",
+    "terms": []
+  },
+  {
+    "t": 160.0,
+    "speaker": "Prof. Martin",
+    "text": "Yes, flashcards are a great example. The struggle to remember is what makes the memory stronger.",
+    "terms": []
+  },
+  {
+    "t": 167.0,
+    "speaker": "Prof. Martin",
+    "text": "The second technique is spaced repetition: you review the same thing after one day, then three days, then a week.",
+    "terms": [
+      "spaced repetition"
+    ]
+  },
+  {
+    "t": 176.0,
+    "speaker": "Jade",
+    "text": "Why does waiting longer help?",
+    "terms": []
+  },
+  {
+    "t": 180.0,
+    "speaker": "Prof. Martin",
+    "text": "Because you are about to forget. Each review flattens what Ebbinghaus called the forgetting curve.",
+    "terms": [
+      "forgetting curve"
+    ]
+  },
+  {
+    "t": 189.0,
+    "speaker": "Prof. Martin",
+    "text": "Motivation matters too. Dopamine is released when you expect a reward, and it helps you remember what you were doing.",
+    "terms": [
+      "dopamine"
+    ]
+  },
+  {
+    "t": 198.0,
+    "speaker": "Leo",
+    "text": "Is that why games are so easy to remember?",
+    "terms": []
+  },
+  {
+    "t": 202.0,
+    "speaker": "Prof. Martin",
+    "text": "Partly, yes. Small wins keep the motivation going.",
+    "terms": []
+  },
+  {
+    "t": 208.0,
+    "speaker": "Prof. Martin",
+    "text": "Last point: stress. A little cortisol sharpens attention, but too much for too long damages the hippocampus.",
+    "terms": [
+      "cortisol"
+    ]
+  },
+  {
+    "t": 217.0,
+    "speaker": "Jade",
+    "text": "So exam stress is actually bad for memory?",
+    "terms": []
+  },
+  {
+    "t": 221.0,
+    "speaker": "Prof. Martin",
+    "text": "Chronic stress is. One stressful morning is fine.",
+    "terms": []
+  },
+  {
+    "t": 226.0,
+    "speaker": "Prof. Martin",
+    "text": "{listener}, could you sum up for everyone the two study techniques we covered today?",
+    "terms": []
+  },
+  {
+    "t": 234.0,
+    "speaker": "Prof. Martin",
+    "text": "Perfect: retrieval practice and spaced repetition. Use both before the midterm.",
+    "terms": []
+  },
+  {
+    "t": 240.0,
+    "speaker": "Prof. Martin",
+    "text": "For next week, read chapter five on attention. See you on Thursday.",
+    "terms": []
+  }
+]

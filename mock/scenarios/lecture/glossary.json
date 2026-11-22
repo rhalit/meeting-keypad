@@ -1,0 +1,80 @@
+{
+  "neuroplasticity": {
+    "full": "Neuroplasticity",
+    "explanation": "The brain's ability to change its own wiring throughout life. When you practise a skill or learn a fact, brain cells grow new connections and strengthen the ones you use, while unused ones fade. It is why adults can still learn languages, recover after injuries and get better at almost anything with steady practice.",
+    "example": "the brain physically rewires itself every time you practise",
+    "category": "Science"
+  },
+  "synapse": {
+    "full": "Synapse",
+    "explanation": "The tiny gap where one nerve cell passes a signal to the next, using chemical messengers. Your brain has trillions of them. Learning does not add many new brain cells; it changes these junctions instead: the ones you use often become stronger and faster, and the ones you never use slowly weaken and disappear.",
+    "example": "learning makes the useful ones stronger",
+    "category": "Science"
+  },
+  "long-term potentiation": {
+    "full": "Long-term potentiation (LTP)",
+    "explanation": "A lasting strengthening of the link between two nerve cells that happens when they are active together again and again. Afterwards, a signal from the first cell triggers the second one more easily, sometimes for weeks or longer. Scientists see it as one of the main physical traces that a memory leaves in the brain.",
+    "example": "when two neurons fire together again and again",
+    "category": "Science"
+  },
+  "hippocampus": {
+    "full": "Hippocampus",
+    "explanation": "A small, curved part of the brain, one on each side, shaped a bit like a seahorse. It quickly records new experiences and facts, then helps move them into long-term storage elsewhere in the brain. People with a damaged hippocampus still remember their past but struggle to form new memories.",
+    "example": "a small curved structure deep inside each side of the brain",
+    "category": "Science"
+  },
+  "memory consolidation": {
+    "full": "Memory consolidation",
+    "explanation": "The process that turns a fresh, fragile memory into a stable, long-lasting one. Much of it happens during sleep, when the brain replays the day and moves the important parts from the hippocampus to the outer layer of the brain. Sleeping too little interrupts it, so you forget more of what you learned.",
+    "example": "the brain replays the day and copies the important parts to the cortex",
+    "category": "Science"
+  },
+  "REM sleep": {
+    "full": "Rapid eye movement sleep",
+    "explanation": "A stage of sleep in which your eyes move quickly under your eyelids, your brain is almost as active as when awake, and most vivid dreams happen. It returns several times a night, in longer periods towards morning. Researchers link it to emotional balance and to connecting new information with what you already know.",
+    "example": "REM sleep seems to help connect new ideas to old ones",
+    "category": "Health"
+  },
+  "working memory": {
+    "full": "Working memory",
+    "explanation": "The small mental workspace where you hold and use information for a few seconds, like a phone number you are about to dial. It can only keep about four pieces at once, so it fills up fast. Good teaching avoids overloading it by giving new information in small, clear steps.",
+    "example": "That limit is your working memory",
+    "category": "Science"
+  },
+  "cognitive load": {
+    "full": "Cognitive load",
+    "explanation": "How much mental effort a task demands from your working memory at a given moment. When a lesson throws too many new ideas, words or pictures at you at once, the load gets too high and very little is actually learned. Teachers reduce it with clear examples, simple slides and one idea at a time.",
+    "example": "we call it high cognitive load",
+    "category": "Science"
+  },
+  "retrieval practice": {
+    "full": "Retrieval practice",
+    "explanation": "A study method where you test yourself instead of rereading: you close your notes and try to bring the answer back from memory, for example with flashcards or practice questions. The effort of recalling strengthens the memory much more than reading it again, even when you get the answer wrong at first.",
+    "example": "you close the book and try to recall the answer from memory",
+    "category": "Science"
+  },
+  "spaced repetition": {
+    "full": "Spaced repetition",
+    "explanation": "A way of reviewing material at growing intervals, such as one day, then three days, then a week, instead of all at once. Each review comes just before you would forget, which makes the memory last longer. Many flashcard apps schedule reviews this way automatically, so you spend less total time studying.",
+    "example": "you review the same thing after one day, then three days, then a week",
+    "category": "Science"
+  },
+  "forgetting curve": {
+    "full": "Ebbinghaus forgetting curve",
+    "explanation": "A graph of how quickly we forget new information when we never review it: most of it is gone within a day or two, then the loss slows down. The psychologist Hermann Ebbinghaus first measured it in the 1880s. Each well-timed review makes the curve flatter, so you forget more slowly.",
+    "example": "Each review flattens what Ebbinghaus called the forgetting curve",
+    "category": "Science"
+  },
+  "dopamine": {
+    "full": "Dopamine",
+    "explanation": "A chemical messenger in the brain linked to motivation and reward. It is released when you expect something good, such as a correct answer, a win or praise, and it pushes you to keep going. It also helps the brain mark what you were doing at that moment as worth remembering.",
+    "example": "Dopamine is released when you expect a reward",
+    "category": "Science"
+  },
+  "cortisol": {
+    "full": "Cortisol",
+    "explanation": "The body's main stress hormone, released by small glands above the kidneys. In short bursts it sharpens attention and gives you energy to face a challenge. When stress lasts for weeks, high cortisol levels disturb sleep, weaken the immune system and can harm the parts of the brain used to form memories.",
+    "example": "A little cortisol sharpens attention",
+    "category": "Health"
+  }
+}

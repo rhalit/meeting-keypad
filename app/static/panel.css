@@ -9,6 +9,18 @@
   --mark: rgba(210, 153, 34, 0.35);
   color-scheme: dark;
 }
+/* Light theme (Settings → Theme). Keys keep their keypad colours. */
+:root[data-theme="light"] {
+  --bg-page: #f6f8fa;
+  --bg-card: #ffffff;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #59636e;
+  --accent: #0969da;
+  --ok: #1a7f37;
+  --mark: rgba(212, 167, 44, 0.35);
+  color-scheme: light;
+}
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
@@ -139,6 +151,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 #export-text.ok { color: #3fb950; }
 #export-text.err { color: #f85149; }
 #export-text.wait { color: #d29922; }
+
+/* Top bar and Settings view */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.summary { color: var(--muted); font-weight: 600; }
+#settings-btn.on { background: #1f6feb33; border-color: var(--accent); }
+.settings { display: flex; flex-direction: column; gap: 10px; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+.settings[hidden] { display: none; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setting.top { align-items: flex-start; }
+.setting-name { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+#scenario { max-width: 260px; background: var(--bg-page); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
+#scenario:disabled { opacity: 0.5; }
+.colors { display: grid; grid-template-columns: 1fr; gap: 6px; justify-items: start; }
+.color { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.color input { width: 34px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; }
 
 /* Camera focus */
 .camera { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }

@@ -51,10 +51,11 @@
 | `label` | string | yes      | the **full** term (≤ 40 chars, ≤ 4 words) or action name, `""` = blank. The plugin breaks it into lines and fits it (see below); the app never shortens it. |
 | `sub`   | string | no       | category name (term keys only), drawn in small capitals at the top           |
 | `color` | string | no       | `#RRGGBB`. Term keys: category colour (category text, "new" border). Keys without `sub`: label colour (default white) |
+| `bg`    | string | no       | `#RRGGBB` key background, default black (user setting in the app panel). Ignored in `empty` (always black) and `alert` (`color` is the background). On a light `bg` (luminance > 0.55) the plugin draws the white texts (term, default action label) near-black `#111111` and the "seen" grey darker, so they stay readable |
 | `state` | string | yes      | see below                                                                     |
 
 ### Drawing (the plugin does the layout)
-- Dark (black) background, no coloured tile. The image fills the whole key (no device-drawn action name).
+- Dark (black) background by default, or `bg` when the app sends one; no coloured tile. The image fills the whole key (no device-drawn action name).
 - Term keys: `sub` in upper case, small, in `color`, at the top. `label` large, bold, white, centred,
   at most 2 lines broken between words, the largest font size that fits. A word is abbreviated
   (`"Quantiz."`) only if it does not fit on a line at the smallest size; text beyond 2 lines at the
@@ -92,6 +93,15 @@ A press within 500 ms after a shift goes to the term that was on that key before
   then their normal state, alternating every 500 ms. It stops when you look back or press any key;
   that press only stops the pulse and shows the "For me?" card, it does not trigger the key's own action.
   Slot 8 keeps its own pulse underneath and resumes it when the all-keys pulse stops.
+
+## Education mode (app setting)
+The app has two layouts. Meeting (default): 6 Catch-up · 7 Save · 8 For me?. Education:
+6 `Flashcard` · 7 `Quiz me` · 8 `Explain simply` (slots 0–5 stay term keys). On a switch the app sends
+slots 6–8 with the new labels. Feedback, with no new states:
+- Flashcard: `busy` while the model writes the card, then `{ "slot": 6, "label": "Added ✓", "color": "#3FB950", "state": "shown" }` for 1.5 s.
+- Quiz me: `busy` while the model writes a question, then `{ "slot": 7, "label": "Answer", "color": "#E3B341", "state": "shown" }`
+  until the next press shows the answer.
+- Explain simply: `busy` while it streams; after an away period it reads `Missed 2m` (amber), like Catch-up in Meeting mode.
 
 ## Camera focus (app only)
 The app reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`, any Logitech webcam) to know whether you

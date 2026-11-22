@@ -17,7 +17,37 @@ architecture, commands and rules, and `protocol/messages.md` for the plugin ↔ 
    macOS credits the permission to Electron, not to Terminal, so allowing only Terminal gives silence in Live mode.
    (`npm run smoke:live` runs in plain Node, so for that the terminal app needs the permission.)
 5. **Run:** `cd app && npm run dev`, switch the panel to Live and press Start listening.
-6. **Camera focus (optional):** see below.
+6. **Keypad plugin** (needs Logi Options+): `mkdir -p ~/Library/Application\ Support/Logi/LogiPluginService/Plugins`
+   (the build fails with `MSB3073` if this folder is missing), then `cd plugin/MeetingKeysPlugin && dotnet build`.
+   Options+ → Settings → "Restart Logi Plugin Service". Then in Options+, on the MX Keypad, put the 9 "Meeting Keys"
+   actions on the matching keys (top left … bottom right). The panel shows "Keypad connected".
+7. **Camera focus (optional):** see below.
+
+## Meeting and Education modes
+
+The panel switches between two layouts (keys 0–5 always show terms):
+- **Meeting** (default): Catch-up · Save · For me?
+- **Education**: **Flashcard** (the model turns the last 90 s into a question/answer card, appended to
+  `output/flashcards.csv`, ready for Anki: File → Import) · **Quiz me** (a 3-choice question on the last 3 min;
+  press again for the answer) · **Explain simply** (the last 2 min in plain words with an example).
+
+Everything is in the panel's **⚙ Settings**: Source (Mock / Live), Mode (Meeting / Education), **Scenario** (mock content
+for the mode), Theme (Dark / Light) and the key background colours. Choices are remembered between runs.
+
+Mock scenarios (`mock/scenarios/index.json`):
+
+| Mode | Scenario | Terms |
+|---|---|---|
+| Meeting | Product sprint review (default, `mock/meeting.json`) | RAG, LoRA, SOC 2, runway… |
+| Meeting | AI platform sync | hallucination, evals, prompt injection, AI agent… |
+| Meeting | Quarterly business review | ARR, EBITDA, CAC payback, Series B… |
+| Meeting | New employee onboarding | SSO, MFA, GDPR, OKR… |
+| Education | Learning sciences: how the brain learns (default) | hippocampus, spaced repetition… |
+| Education | Intro to machine learning | gradient descent, overfitting, transformer… |
+| Education | Climate science 101 | greenhouse effect, albedo, carbon budget… |
+
+Each one asks the listener two direct questions (For me? / the away pulse). `MOCK_SCENARIO=<id> npm run dev` forces a
+meeting scenario at startup; `USAGE=education npm run dev` starts in Education mode.
 
 ## Camera focus (Logi Gaze Tracker)
 

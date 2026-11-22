@@ -1,0 +1,211 @@
+[
+  {
+    "t": 0.0,
+    "speaker": "Maya",
+    "text": "Morning all. Quick AI platform sync: the support assistant, costs, and safety.",
+    "terms": []
+  },
+  {
+    "t": 5.0,
+    "speaker": "Chloe",
+    "text": "Customers love the assistant, but some answers are simply made up.",
+    "terms": []
+  },
+  {
+    "t": 10.0,
+    "speaker": "Maya",
+    "text": "Yes, that's hallucination: the LLM writes something fluent that isn't true.",
+    "terms": [
+      "hallucination",
+      "LLM"
+    ]
+  },
+  {
+    "t": 21.0,
+    "speaker": "Daniel",
+    "text": "Part of it is the context window: we cut the conversation when it gets too long, so the model forgets the start.",
+    "terms": [
+      "context window"
+    ]
+  },
+  {
+    "t": 29.0,
+    "speaker": "Maya",
+    "text": "Then let's ground it. We turn every help article into embeddings and pass the closest ones with each question.",
+    "terms": [
+      "embeddings"
+    ]
+  },
+  {
+    "t": 37.0,
+    "speaker": "Chloe",
+    "text": "Does that make each answer more expensive?",
+    "terms": []
+  },
+  {
+    "t": 41.0,
+    "speaker": "Daniel",
+    "text": "A bit. We pay per token, and the articles add about two thousand of them per question.",
+    "terms": [
+      "token"
+    ]
+  },
+  {
+    "t": 49.0,
+    "speaker": "Daniel",
+    "text": "Inference is now our biggest cloud cost, more than storage.",
+    "terms": [
+      "inference"
+    ]
+  },
+  {
+    "t": 55.0,
+    "speaker": "Maya",
+    "text": "We could try distillation: train a small model to copy the big one on our own questions.",
+    "terms": [
+      "distillation"
+    ]
+  },
+  {
+    "t": 64.0,
+    "speaker": "Daniel",
+    "text": "A smaller model would also cut our GPU bill in half.",
+    "terms": [
+      "GPU"
+    ]
+  },
+  {
+    "t": 70.0,
+    "speaker": "Chloe",
+    "text": "And quality? I don't want to trade cost for wrong answers.",
+    "terms": []
+  },
+  {
+    "t": 75.0,
+    "speaker": "Maya",
+    "text": "That's what evals are for: a fixed set of real questions we score after every change.",
+    "terms": [
+      "evals"
+    ]
+  },
+  {
+    "t": 84.0,
+    "speaker": "Maya",
+    "text": "We have two hundred so far, graded by the support team.",
+    "terms": []
+  },
+  {
+    "t": 90.0,
+    "speaker": "Maya",
+    "text": "{listener}, could you add twenty tricky billing questions to the test set this week?",
+    "terms": []
+  },
+  {
+    "t": 98.0,
+    "speaker": "Daniel",
+    "text": "Thanks. Next topic is security.",
+    "terms": []
+  },
+  {
+    "t": 102.0,
+    "speaker": "Daniel",
+    "text": "Someone tried prompt injection last week: they hid instructions in a ticket to make the bot reveal internal notes.",
+    "terms": [
+      "prompt injection"
+    ]
+  },
+  {
+    "t": 112.0,
+    "speaker": "Chloe",
+    "text": "Did it work?",
+    "terms": []
+  },
+  {
+    "t": 115.0,
+    "speaker": "Daniel",
+    "text": "No, our guardrails caught it. They check every input and output against a list of rules.",
+    "terms": [
+      "guardrails"
+    ]
+  },
+  {
+    "t": 124.0,
+    "speaker": "Maya",
+    "text": "We should also run a few red teaming sessions before the launch.",
+    "terms": [
+      "red teaming"
+    ]
+  },
+  {
+    "t": 131.0,
+    "speaker": "Chloe",
+    "text": "Who does that? An outside firm?",
+    "terms": []
+  },
+  {
+    "t": 135.0,
+    "speaker": "Daniel",
+    "text": "Internal first, with people from support and legal.",
+    "terms": []
+  },
+  {
+    "t": 141.0,
+    "speaker": "Maya",
+    "text": "One more idea: an AI agent that can actually issue refunds, not just answer questions.",
+    "terms": [
+      "AI agent"
+    ]
+  },
+  {
+    "t": 150.0,
+    "speaker": "Chloe",
+    "text": "That's exciting, but scary. What if it refunds the wrong customer?",
+    "terms": []
+  },
+  {
+    "t": 155.0,
+    "speaker": "Maya",
+    "text": "We'd keep a human in the loop: the agent prepares the refund, a person approves it.",
+    "terms": [
+      "human in the loop"
+    ]
+  },
+  {
+    "t": 164.0,
+    "speaker": "Daniel",
+    "text": "And it would call our billing API with function calling, which the current model supports.",
+    "terms": [
+      "function calling"
+    ]
+  },
+  {
+    "t": 173.0,
+    "speaker": "Chloe",
+    "text": "Let's pilot it with ten percent of refund tickets.",
+    "terms": []
+  },
+  {
+    "t": 178.0,
+    "speaker": "Maya",
+    "text": "Agreed. I'll write the pilot plan.",
+    "terms": []
+  },
+  {
+    "t": 183.0,
+    "speaker": "Daniel",
+    "text": "I'll set up the small-model experiment and compare costs.",
+    "terms": []
+  },
+  {
+    "t": 189.0,
+    "speaker": "Chloe",
+    "text": "{listener}, can you check with legal whether the agent may approve refunds under fifty euros on its own?",
+    "terms": []
+  },
+  {
+    "t": 197.0,
+    "speaker": "Maya",
+    "text": "Great. Same time next week.",
+    "terms": []
+  }
+]

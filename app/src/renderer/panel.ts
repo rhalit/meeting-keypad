@@ -5,6 +5,7 @@ interface PanelKey {
   label: string;
   sub?: string;
   color?: string;
+  bg?: string;
   state: string;
   term?: string;
 }
@@ -46,6 +47,10 @@ interface PanelFocusMsg {
   mentionFlashing: boolean;
 }
 interface PanelSnapshotMsg {
+  usage: "meeting" | "education";
+  settings: { theme: "dark" | "light"; keyBg: Partial<Record<"terms" | "6" | "7" | "8", string>> };
+  scenarios: { id: string; title: string }[];
+  scenario: string;
   mode: "mock" | "live";
   playback: PanelPlayback;
   live: PanelLiveMsg;
@@ -91,6 +96,8 @@ const gridEl = $("grid");
 const queueEl = $("queue");
 const transcriptEl = $("transcript");
 const modeMockBtn = $<HTMLButtonElement>("mode-mock");
+const usageMeetingBtn = $<HTMLButtonElement>("usage-meeting");
+const usageEducationBtn = $<HTMLButtonElement>("usage-education");
 const modeLiveBtn = $<HTMLButtonElement>("mode-live");
 const mockControls = $("mock-controls");
 const liveControls = $("live-controls");
@@ -186,9 +193,67 @@ function renderFocus(f: PanelFocusMsg): void {
   simAwayBtn.classList.toggle("on", simAway);
 }
 
+/** Same rule as the plugin: relative luminance above 0.55 counts as a light background. */
+function isLight(hex: string): boolean {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.55;
+}
+
+const settingsBtn = $<HTMLButtonElement>("settings-btn");
+const settingsEl = $("settings");
+const summaryEl = $("summary");
+const themeDarkBtn = $<HTMLButtonElement>("theme-dark");
+const themeLightBtn = $<HTMLButtonElement>("theme-light");
+const bgResetBtn = $<HTMLButtonElement>("bg-reset");
+const scenarioEl = $<HTMLSelectElement>("scenario");
+let scenarioKey = "";
+const BG_TARGETS = ["terms", "6", "7", "8"] as const;
+const bgInputs = BG_TARGETS.map((t) => $<HTMLInputElement>(`bg-${t}`));
+const BOTTOM_NAMES = {
+  meeting: ["Catch-up", "Save", "For me?"],
+  education: ["Flashcard", "Quiz me", "Explain simply"],
+};
+const POSITIONS = ["Bottom left", "Bottom middle", "Bottom right"];
+
+function renderSettings(s: PanelSnapshotMsg): void {
+  document.documentElement.dataset.theme = s.settings.theme;
+  themeDarkBtn.classList.toggle("active", s.settings.theme === "dark");
+  themeLightBtn.classList.toggle("active", s.settings.theme === "light");
+  const current = s.scenarios.find((x) => x.id === s.scenario);
+  summaryEl.textContent =
+    `${s.mode === "live" ? "Live" : "Mock"} · ${s.usage === "education" ? "Education" : "Meeting"}` +
+    (s.mode === "mock" && current ? ` · ${current.title}` : "");
+  // Rebuild the list only when it changes (snapshots arrive twice a second while playing).
+  const key = JSON.stringify([s.scenarios, s.scenario]);
+  if (key !== scenarioKey) {
+    scenarioKey = key;
+    scenarioEl.replaceChildren(
+      ...s.scenarios.map((x) => {
+        const o = document.createElement("option");
+        o.value = x.id;
+        o.textContent = x.title;
+        o.selected = x.id === s.scenario;
+        return o;
+      }),
+    );
+  }
+  scenarioEl.disabled = s.mode === "live";
+  scenarioEl.title = s.mode === "live" ? "Scenarios are mock content: switch Source to Mock" : "Mock content for this mode";
+  BG_TARGETS.forEach((t, i) => {
+    const input = bgInputs[i];
+    if (document.activeElement !== input) input.value = (s.settings.keyBg[t] ?? "#000000").toLowerCase();
+    if (i > 0) $(`bg-${t}-name`).textContent = `${POSITIONS[i - 1]} · ${BOTTOM_NAMES[s.usage][i - 1]}`;
+  });
+}
+
 function renderSnapshot(s: PanelSnapshotMsg): void {
+  renderSettings(s);
   mode = s.mode;
   modeMockBtn.classList.toggle("active", mode === "mock");
+  usageMeetingBtn.classList.toggle("active", s.usage === "meeting");
+  usageEducationBtn.classList.toggle("active", s.usage === "education");
+  modeMockBtn.textContent = s.usage === "education" ? "Mock lecture" : "Mock meeting";
+  modeLiveBtn.textContent = s.usage === "education" ? "Live lecture" : "Live meeting";
   modeLiveBtn.classList.toggle("active", mode === "live");
   mockControls.hidden = mode !== "mock";
   liveControls.hidden = mode !== "live";
@@ -213,6 +278,15 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
       // In alert, `color` is the background (it pulses between two reds) and the label is white.
       if (k.state === "alert") key.style.background = k.color ?? "#e5484d";
       else if (k.color && k.state !== "empty") key.style.setProperty("--accent-key", k.color);
+      // User background (Settings), drawn like the plugin: near-black text on a light one.
+      if (k.bg && k.state !== "alert" && k.state !== "empty") {
+        key.style.background = k.bg;
+        key.style.borderColor = k.state === "new" ? "" : k.bg;
+        if (isLight(k.bg)) {
+          key.style.color = "#111111";
+          if (!k.color) key.style.setProperty("--accent-key", "#111111");
+        }
+      }
       key.title = k.term ? `${k.term} (${k.state})` : `slot ${k.slot} (${k.state})`;
       const cat = document.createElement("div");
       cat.className = "cat";
@@ -312,6 +386,24 @@ function setLevel(db: number): void {
 
 playBtn.addEventListener("click", () => window.keypad.control(playing ? "pause" : "play"));
 modeMockBtn.addEventListener("click", () => window.keypad.control("mode-mock"));
+usageMeetingBtn.addEventListener("click", () => window.keypad.control("usage-meeting"));
+settingsBtn.addEventListener("click", () => {
+  settingsEl.hidden = !settingsEl.hidden;
+  settingsBtn.classList.toggle("on", !settingsEl.hidden);
+});
+themeDarkBtn.addEventListener("click", () => window.keypad.control("theme-dark"));
+themeLightBtn.addEventListener("click", () => window.keypad.control("theme-light"));
+bgResetBtn.addEventListener("click", () => window.keypad.control("key-bg-reset"));
+scenarioEl.addEventListener("change", () => window.keypad.control("scenario", scenarioEl.value));
+// Colour pickers fire `input` continuously while dragging: send at most every 150 ms (the keypad redraws each time).
+const bgTimers = new Map<string, number>();
+BG_TARGETS.forEach((t, i) =>
+  bgInputs[i].addEventListener("input", () => {
+    clearTimeout(bgTimers.get(t));
+    bgTimers.set(t, window.setTimeout(() => window.keypad.control("key-bg", `${t}=${bgInputs[i].value}`), 150));
+  }),
+);
+usageEducationBtn.addEventListener("click", () => window.keypad.control("usage-education"));
 modeLiveBtn.addEventListener("click", () => window.keypad.control("mode-live"));
 listenBtn.addEventListener("click", () => {
   if (listening) window.keypad.control("listen-stop");

@@ -1,0 +1,74 @@
+{
+  "neural network": {
+    "full": "Artificial neural network",
+    "explanation": "A computer model made of many simple connected units arranged in layers, loosely inspired by the brain. Each unit takes numbers in, combines them and passes a result on. By adjusting the strength of the connections during training, the network learns to recognise patterns in images, sounds or text.",
+    "example": "layers of tiny units that each multiply, add and pass a number on",
+    "category": "Tech"
+  },
+  "parameter": {
+    "full": "Model parameter (weight)",
+    "explanation": "One of the adjustable numbers inside a machine learning model that is set during training, like a dial. Together, the parameters store everything the model has learned. Small models have thousands; large language models have billions, which is why they need so much data and computing power to train.",
+    "example": "Every dial is a parameter",
+    "category": "Tech"
+  },
+  "training set": {
+    "full": "Training set",
+    "explanation": "The collection of examples a machine learning model learns from, each paired with the right answer, such as photos labelled cat or dog. The model adjusts itself until its predictions match these answers as well as possible. Its quality and variety strongly shape what the model will later get right or wrong.",
+    "example": "thousands of examples where we already know the right answer",
+    "category": "Tech"
+  },
+  "loss function": {
+    "full": "Loss function",
+    "explanation": "A formula that turns the model's mistakes into a single number: the bigger the errors on the training examples, the higher the loss. Training is the search for parameter values that make this number as small as possible. Choosing the right loss decides what the model treats as a serious mistake.",
+    "example": "measures how wrong the model is",
+    "category": "Tech"
+  },
+  "gradient descent": {
+    "full": "Gradient descent",
+    "explanation": "The step-by-step method most models use to learn. At each step it works out which small change to each parameter would reduce the error the most, makes that change, and repeats. It is like walking down a foggy hill by always taking a small step in the steepest downhill direction.",
+    "example": "we nudge every parameter a little in the direction that reduces the loss",
+    "category": "Tech"
+  },
+  "backpropagation": {
+    "full": "Backpropagation",
+    "explanation": "The method that works out how much each connection in a neural network contributed to an error. It starts from the final mistake and passes the blame backwards, layer by layer. This tells the training algorithm which way to adjust every parameter, which makes training huge networks practical.",
+    "example": "starting from the error and working backwards through the layers",
+    "category": "Tech"
+  },
+  "learning rate": {
+    "full": "Learning rate",
+    "explanation": "The size of the adjustment a model makes to its parameters at each training step. If it is too large, training overshoots and becomes unstable; if it is too small, learning crawls and may take days. Choosing a good value is one of the most important settings when training a model.",
+    "example": "That step size is called the learning rate",
+    "category": "Tech"
+  },
+  "epoch": {
+    "full": "Epoch",
+    "explanation": "One complete pass through every example in the training set during training. Models usually need many of them, seeing each example again and again, to learn well. Training too few gives a model that has not learned enough; training too many can make it memorise the examples instead of learning general rules.",
+    "example": "One full pass over the training set is called an epoch",
+    "category": "Tech"
+  },
+  "overfitting": {
+    "full": "Overfitting",
+    "explanation": "When a model learns its training examples too closely, including their noise and quirks, instead of the general pattern. It then scores very well on data it has seen but poorly on new data. It is like memorising past exam answers without understanding the subject, and it is a central risk in machine learning.",
+    "example": "The model memorises the training examples instead of learning the general pattern",
+    "category": "Tech"
+  },
+  "test set": {
+    "full": "Test set",
+    "explanation": "A group of examples kept aside and never used during training, used only at the end to measure how well the model handles new data. Because the model has never seen them, its score on these examples is an honest estimate of how it will perform in the real world.",
+    "example": "a separate test set the model never sees during training",
+    "category": "Tech"
+  },
+  "regularization": {
+    "full": "Regularization",
+    "explanation": "A set of techniques that discourage a model from becoming too complicated during training, for example by adding a penalty for very large parameter values or randomly switching off parts of the network. It pushes the model towards simpler patterns that generalise better, reducing overfitting to the training examples.",
+    "example": "penalises overly complicated models",
+    "category": "Tech"
+  },
+  "transformer": {
+    "full": "Transformer",
+    "explanation": "A type of neural network introduced in 2017 that processes all the words of a text at once and learns which words matter most to each other, a mechanism called attention. It powers modern language models such as chat assistants, as well as many translation, image and speech systems.",
+    "example": "a network design that pays attention to every word in relation to the others",
+    "category": "Tech"
+  }
+}
