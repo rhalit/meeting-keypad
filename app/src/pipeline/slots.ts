@@ -37,6 +37,15 @@ export interface ActionKeys {
   setActionOverride(slot: number, override: ActionOverride | null): void;
 }
 
+/** Background of every key during the away-mention pulse. */
+export const FLASH_RED = "#E5484D";
+
+/** What the mention alert needs: pulse all 9 keys red. */
+export interface FlashKeys {
+  /** true = all keys `alert`, false = all keys normal (pulse off phase), null = no flash. */
+  setFlash(phase: boolean | null): void;
+}
+
 export type PressResult =
   | { kind: "term"; slot: number; term: string }
   | { kind: "empty"; slot: number }
@@ -66,8 +75,9 @@ interface Placed {
  * - Emits `change` with only the slots whose KeyState changed, as complete protocol KeyStates, and
  *   `placed` ({ slot, candidate }) for every term that lands on a key (after its `change`; slot 0,
  *   or 1 for the first of two terms placed at the same moment).
+ * - setFlash(true) shows every key as red `alert` (labels kept) on top of all this, for the away-mention pulse.
  */
-export class SlotManager extends EventEmitter implements ActionKeys {
+export class SlotManager extends EventEmitter implements ActionKeys, FlashKeys {
   private readonly clock: Clock;
   private readonly newMs: number;
   private readonly maxNewPerWindow: number;
@@ -81,6 +91,7 @@ export class SlotManager extends EventEmitter implements ActionKeys {
   private placements: number[] = [];
   private pumpTimer: TimerHandle | null = null;
   private overrides = new Map<number, ActionOverride>();
+  private flash: boolean | null = null;
   /** Layout just before the last shift, and when it happened. */
   private beforeShift: (Placed | null)[] | null = null;
   private shiftAt = -Infinity;
@@ -128,6 +139,13 @@ export class SlotManager extends EventEmitter implements ActionKeys {
     this.emit("change", [this.keyState(slot)]);
   }
 
+  setFlash(phase: boolean | null): void {
+    if (this.flash === phase) return;
+    const wasRed = this.flash === true;
+    this.flash = phase;
+    if (wasRed || phase === true) this.emit("change", this.getAll());
+  }
+
   /** All 9 slots in protocol format. */
   getAll(): KeyState[] {
     const out: KeyState[] = [];
@@ -152,6 +170,8 @@ export class SlotManager extends EventEmitter implements ActionKeys {
   /** Back to the initial state (empty term slots, nothing queued or shown, action keys restored). */
   reset(): void {
     const changed: number[] = [...this.overrides.keys()];
+    if (this.flash === true) changed.push(...Array(SLOT_COUNT).keys());
+    this.flash = null;
     this.overrides.clear();
     this.slots.forEach((p, i) => {
       if (!p) return;
@@ -225,6 +245,12 @@ export class SlotManager extends EventEmitter implements ActionKeys {
   }
 
   private keyState(slot: number): KeyState {
+    const base = this.baseKeyState(slot);
+    // In `alert`, color is the background (protocol v2), so a term key's category colour must not leak in.
+    return this.flash === true ? { ...base, color: FLASH_RED, state: "alert" } : base;
+  }
+
+  private baseKeyState(slot: number): KeyState {
     if (slot >= TERM_SLOTS) return { ...actionKey(slot), ...this.overrides.get(slot) };
     const p = this.slots[slot];
     if (!p) return emptyKey(slot);

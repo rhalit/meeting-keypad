@@ -1,8 +1,10 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { AudioCapture } from "../pipeline/audioCapture.js";
-import { CatchUpController, type LlmOutcome } from "../pipeline/catchUp.js";
+import { CatchUpController, longSpan, type LlmOutcome } from "../pipeline/catchUp.js";
 import { realClock } from "../pipeline/clock.js";
+import { FocusTracker, type AwayPeriod, type FocusStatus } from "../pipeline/focus.js";
+import { DEFAULT_GAZE_URL, GazeClient, type GazeStatus } from "../pipeline/gazeSource.js";
 import { DEFAULT_PORT, KeypadBridge, PortInUseError, type PressEvent } from "../pipeline/keypadBridge.js";
 import {
   LlmError,
@@ -22,6 +24,7 @@ import { MeetingRecord } from "../pipeline/meetingRecord.js";
 import { LatencyTracker, formatLatency } from "../pipeline/latency.js";
 import { TermSpotter, type SpotInfo } from "../pipeline/termSpotter.js";
 import { LiveSource, type LiveInterim, type LiveLine } from "../pipeline/liveSource.js";
+import { MentionAlert } from "../pipeline/mentionAlert.js";
 import { loadConfig, loadGlossary, loadMeeting } from "../pipeline/mockData.js";
 import { MockSource } from "../pipeline/mockSource.js";
 import { OverlayController, type HideReason, type OverlayCard } from "../pipeline/overlay.js";
@@ -161,6 +164,27 @@ const spotter = new TermSpotter({
   minIntervalMs: spotterIntervalMs(process.env),
 });
 const explainer = new Explainer({ clock, llm, listener, log, onLlmOutcome });
+
+// --- camera focus: Logi Gaze Tracker -> FocusTracker -> Catch-up "Missed" + mention pulse ------
+
+const gaze = new GazeClient({ url: process.env.GAZE_WS_URL || DEFAULT_GAZE_URL, clock, log: (m) => log(`[camera] ${m}`) });
+const focus = new FocusTracker({ clock, meetingTime });
+// Away + a "For me?" question: all keys pulse; looking back or any press opens the For-me card.
+const mentionAlert = new MentionAlert({ clock, focus, keys: slots, overlay, log, reveal: () => void forMe.press() });
+
+gaze.on("sample", (s) => focus.sample(s));
+gaze.on("live", (live: boolean) => focus.setCameraLive(live));
+gaze.on("status", (_s: GazeStatus) => pushSnapshot());
+focus.on("change", (s: FocusStatus) => {
+  log(`[focus] ${s.state}${s.reason ? ` (${s.reason})` : ""}`);
+  pushSnapshot();
+});
+focus.on("back", (p: AwayPeriod) => {
+  log(`[focus] back after ${Math.round(p.ms / 1000)} s away, meeting ${mmss(p.from)}-${mmss(p.to)}`);
+  catchUp.setMissed(p);
+  mentionAlert.back();
+});
+
 const saver = new SaveController({
   clock,
   llm,
@@ -173,7 +197,21 @@ const saver = new SaveController({
   onLlmOutcome,
 });
 
-const forMe = new ForMeController({ clock, llm, transcript, keys: slots, overlay, log, onLlmOutcome, listener });
+const forMe = new ForMeController({
+  clock,
+  llm,
+  transcript,
+  keys: slots,
+  overlay,
+  log,
+  onLlmOutcome,
+  listener,
+  // Camera focus: when you look away, a question for you also pulses all keys (mentionAlert).
+  onQuestion: (q) => {
+    const r = mentionAlert.mention({ t: q.t, speaker: q.speaker, text: q.line });
+    if (r === "flashing") log("for-me: you are away, all keys pulse");
+  },
+});
 /** Start time, spoken seconds and the terms that reached a key, for the export. */
 const record = new MeetingRecord();
 const exporter = new MeetingExporter({ clock, llm, dir: meetingsDir, log, onLlmOutcome });
@@ -202,7 +240,22 @@ function snapshot(): PanelSnapshot {
     pluginsConnected: bridge.connectedCount(),
     keys: slots.getAll().map((k, i) => ({ ...k, term: slots.termAt(i) ?? undefined })),
     queued: slots.queued(),
+    focus: focusSnapshot(),
     export: exportStatus,
+  };
+}
+
+function focusSnapshot(): PanelSnapshot["focus"] {
+  const f = focus.status();
+  const m = catchUp.missedSpan();
+  return {
+    state: f.state,
+    reason: f.reason,
+    forMs: clock.now() - f.since,
+    simulated: f.simulated,
+    camera: gaze.status(),
+    missed: m ? longSpan(m.to - m.from) : undefined,
+    mentionFlashing: mentionAlert.isFlashing(),
   };
 }
 
@@ -260,6 +313,8 @@ function resetMeeting(why: string): void {
   spotter.reset();
   explainer.reset();
   latency.reset();
+  mentionAlert.reset();
+  focus.restartPeriod();
   overlay.hide("restart");
   slots.reset();
   transcript.clear();
@@ -345,6 +400,10 @@ bridge.on("press", ({ slot }: PressEvent) => {
   const guard = debouncer.check(slot);
   if (!guard.ok) {
     log(`PRESS slot ${slot} ignored: ${guard.reason}`);
+    return;
+  }
+  if (mentionAlert.consumePress()) {
+    log(`PRESS slot ${slot}: stopped the away-mention pulse`);
     return;
   }
   const r = slots.press(slot);
@@ -487,6 +546,16 @@ ipcMain.on("panel:control", (_e, cmd: PanelCommand, arg?: unknown) => {
     case "export":
       exportMeeting("button", true);
       break;
+    case "sim-away":
+      focus.setSimulatedAway(arg === "on");
+      break;
+    case "sim-mention":
+      // Goes through the real "For me?" check (one model call), as if this line had been said.
+      forMe.addLine({ t: meetingTime(), speaker: "Demo", text: `${config.listenerName}, can you send me the latency numbers by Friday?` });
+      break;
+    case "gaze-calibrate":
+      if (!gaze.calibrate()) log("[camera] cannot calibrate: Gaze Tracker not connected");
+      break;
   }
 });
 
@@ -533,6 +602,7 @@ app.whenReady().then(async () => {
   overlayWindow = new OverlayWindow({ appRoot, onShown: onOverlayShown, log: (m) => log(`[overlay] ${m}`) });
   createPanel();
   void runWarmUp();
+  gaze.start(); // retries every 2 s, so the Gaze Tracker app can start before or after us
   if (!(spotterLlm instanceof MisconfiguredClient)) {
     void warmUp(spotterLlm, clock).then((r) =>
       log(r.ok ? `[spotter-llm] warm-up ok: ${spotterLlm.describe()} in ${r.ms} ms` : `[spotter-llm] WARNING: warm-up failed: ${r.error.kind}: ${r.error.message}`),
@@ -545,7 +615,7 @@ app.whenReady().then(async () => {
     void setMode("live").then(() => startListening(keytermsText));
   }
   setInterval(() => {
-    if (mockSource.state().playing || liveSource.isListening()) pushSnapshot();
+    if (mockSource.state().playing || liveSource.isListening() || focus.status().state !== "off") pushSnapshot();
   }, 500);
 });
 
@@ -555,6 +625,8 @@ app.on("before-quit", () => {
   forMe.reset();
   catchUp.cancel();
   saver.reset();
+  mentionAlert.reset();
+  gaze.stop();
   spotter.dispose();
   mockSource.dispose();
   audio.killNow(); // never leave audiotee running after the app quits

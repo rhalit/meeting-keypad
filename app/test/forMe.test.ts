@@ -99,6 +99,29 @@ describe("ForMeController", () => {
     expect(card().title).toBe("Nothing for you so far.");
   });
 
+  it("onQuestion (camera focus) fires for a question aimed at the listener, not for a mere mention", async () => {
+    const seen: string[] = [];
+    forMe = new ForMeController({
+      clock,
+      llm,
+      transcript,
+      keys: slots,
+      overlay,
+      log: () => {},
+      listener: { name: "Rhali", aliases: ["Rally"], knows: "a general audience" },
+      onQuestion: (q) => seen.push(`${q.t} ${q.speaker}: ${q.line}`),
+    });
+    say({ t: 30, speaker: "Lena", text: "Thanks Rhali for the notes yesterday." });
+    llm.last().end({ isForListener: false, question: "", context: "", suggestedReply: "" });
+    await forMe.whenIdle();
+    expect(seen).toEqual([]);
+    say(ASK_SOC2);
+    llm.last().end(soc2Answer);
+    await forMe.whenIdle();
+    expect(seen).toEqual([`152 Lena: ${ASK_SOC2.text}`]);
+    expect(forMe.alerting()).toBe(true); // slot 8 pulses as before
+  });
+
   it("pulses slot 8 between two reds every 600 ms and stops after 90 s; the card stays available", async () => {
     say(ASK_SOC2);
     llm.last().end(soc2Answer);

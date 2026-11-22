@@ -17,6 +17,37 @@ architecture, commands and rules, and `protocol/messages.md` for the plugin ↔ 
    macOS credits the permission to Electron, not to Terminal, so allowing only Terminal gives silence in Live mode.
    (`npm run smoke:live` runs in plain Node, so for that the terminal app needs the permission.)
 5. **Run:** `cd app && npm run dev`, switch the panel to Live and press Start listening.
+6. **Camera focus (optional):** see below.
+
+## Camera focus (Logi Gaze Tracker)
+
+The app uses Logitech's [Gaze Tracker](https://logitech.github.io/hackathons/logi-gaze-tracker/setup/)
+(any Logitech webcam, e.g. the MX Brio) to know whether you are looking at the screen:
+
+- Away for more than ~3 s (looking off-screen, or no face) and back again → the Catch-up key reads
+  `Missed 2m`, and pressing it summarises from the moment you looked away until now.
+- A "For me?" question while you are away → all 9 keys pulse red until you look back or press a key,
+  then the "For me?" card opens (question, context, suggested reply).
+
+Setup, once per machine:
+1. Download `Gaze.Tracker-1.0.1-arm64.dmg` (Apple Silicon) from
+   https://github.com/Logitech/hackathons/releases/tag/logi-gaze-tracker and drag it to Applications.
+   It is unsigned: on first launch click Done, then System Settings → Privacy & Security → Open Anyway.
+   Allow camera access. The first run needs internet (it downloads its face model).
+2. Menu bar icon → Controls… → Setup: pick the MX Brio, 1920×1080, fill in Rig setup, Apply rig.
+3. Calibrate: the panel's **Calibrate gaze** button (or tray icon → Start Calibration), look at the 9 points.
+   Without calibration the app only detects "left the desk", not "looking away".
+   On a MacBook with a notch, calibration fails with "fullscreen viewport 1512×949 does not match screen 1512×982".
+   Fix (quit the tracker first): `plutil -replace NSPrefersDisplaySafeAreaCompatibilityMode -bool YES
+   "/Applications/Gaze Tracker.app/Contents/Info.plist" && codesign --force --deep -s - "/Applications/Gaze Tracker.app"`,
+   then reopen it (Open Anyway again if macOS asks). It then runs below the notch and calibration works.
+4. Start Meeting Keypad. The panel's camera line shows `Camera: tracking your gaze`.
+
+The app connects to `ws://127.0.0.1:8964` (override with `GAZE_WS_URL`) and retries every 2 s, so the
+order does not matter. Only the tracked display counts: looking at a second monitor counts as away.
+**Simulate away** fakes looking away without a camera (demo fallback); **Simulate mention** sends a line
+naming you through the real "For me?" check (one model call).
+Check before the demo that Meet/Zoom and the Gaze Tracker can use the MX Brio at the same time.
 
 ## Recording a fixture (offline tuning)
 

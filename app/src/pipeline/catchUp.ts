@@ -7,6 +7,28 @@ import type { TranscriptLine } from "./transcriptBuffer.js";
 
 export const CATCH_UP_SLOT = 6;
 export const TTFT_TARGET_MS = 3000;
+/** Label colour of the "Missed 2m" key (protocol v2: keys are black, `color` is the label colour). */
+export const MISSED_COLOR = "#E3B341";
+
+/** Meeting seconds you missed (camera focus: from looking away to looking back). */
+export interface MissedSpan {
+  from: number;
+  to: number;
+}
+
+/** "45s", "2m": short enough for the key. */
+export function shortSpan(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return s < 60 ? `${s}s` : `${Math.round(s / 60)}m`;
+}
+
+/** "45 s", "2 min 10 s" for card text. */
+export function longSpan(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+}
 
 export type LlmOutcome = { ok: true } | { ok: false; error: LlmError };
 
@@ -31,6 +53,12 @@ export interface CatchUpOptions {
   visibleMs?: number;
   errorMs?: number;
   notMuchMs?: number;
+  /** Away periods shorter than this (meeting seconds) do not mark the key. */
+  missedMinS?: number;
+  /** The "Missed" key goes back to normal after this long unpressed. */
+  missedTtlMs?: number;
+  /** A missed-span catch-up covers at most this many seconds back. */
+  missedMaxS?: number;
   /** At most one model call per this long (start to start); a press in between re-shows the last card. */
   cooldownMs?: number;
 }
@@ -49,6 +77,8 @@ interface Run {
 
 /**
  * Catch-up key (slot 6): streams a 3-bullet summary of the last 120 s into a text card.
+ * After an away period (setMissed), the key reads "Missed 2m" and the next press summarises from
+ * the moment you looked away until now instead.
  * Slot 6 is "busy" while it runs. A press while running is ignored; a press on the visible
  * Catch-up card hides it. If another card replaces it mid-stream, the request is aborted.
  *
@@ -62,6 +92,8 @@ export class CatchUpController {
   private run: Run | null = null;
   private readonly inFlight = new Set<Promise<void>>();
   private cardId: number | null = null;
+  private missed: MissedSpan | null = null;
+  private missedTimer: TimerHandle | null = null;
   /** Last finished summary and the newest transcript line it covered. */
   private last: { body: string; lineKey: string } | null = null;
   /** Clock ms of the last model call. */
@@ -78,6 +110,9 @@ export class CatchUpController {
       visibleMs: 20_000,
       errorMs: 8_000,
       notMuchMs: 6_000,
+      missedMinS: 10,
+      missedTtlMs: 300_000,
+      missedMaxS: 900,
       cooldownMs: 10_000,
       ...opts,
     };
@@ -89,13 +124,14 @@ export class CatchUpController {
       log("catch-up: still running, press ignored");
       return "ignored";
     }
-    if (this.cardId !== null && overlay.isVisible(this.cardId)) {
+    if (this.cardId !== null && overlay.isVisible(this.cardId) && !this.missed) {
       overlay.hide("toggle");
       this.cardId = null;
       return "hidden";
     }
     const latest = this.latestLineKey();
-    if (this.last && latest === this.last.lineKey) {
+    // A missed span asks for a different summary (from when you looked away), so it skips the re-show guard.
+    if (!this.missed && this.last && latest === this.last.lineKey) {
       log("catch-up: press re-shows the last summary (no new line since it, no model call)");
       this.reshow("nothing new");
       return "reshown";
@@ -104,7 +140,7 @@ export class CatchUpController {
     if (sinceCall < this.o.cooldownMs) {
       const left = Math.ceil((this.o.cooldownMs - sinceCall) / 1000);
       log(`catch-up: press during the ${this.o.cooldownMs / 1000} s cooldown (${left} s left), no model call`);
-      if (this.last) {
+      if (this.last && !this.missed) {
         this.reshow("last summary");
         return "reshown";
       }
@@ -112,6 +148,22 @@ export class CatchUpController {
       return "cooldown";
     }
     const now = this.o.meetingTime();
+    const missed = this.missed;
+    if (missed) {
+      this.clearMissed();
+      const from = Math.max(missed.from, now - this.o.missedMaxS);
+      const lines = this.o.transcript.getLast(now - from, now);
+      const span = longSpan(missed.to - missed.from);
+      if (lines.length === 0) {
+        log("catch-up: nothing was said while you were away");
+        this.cardId = overlay.showText({ eyebrow: `Catch-up · away ${span}`, title: "Nothing was said while you were away.", durationMs: this.o.notMuchMs });
+        return "not-much";
+      }
+      const p = this.start(lines, `Catch-up · while you were away (${span})`, true);
+      this.inFlight.add(p);
+      void p.finally(() => this.inFlight.delete(p));
+      return "started";
+    }
     const lines = this.o.transcript.getLast(this.o.windowS, now);
     if (lines.length === 0 || now - lines[0].t < this.o.minSpokenS) {
       log("catch-up: less than 15 s said, nothing to summarise");
@@ -133,29 +185,69 @@ export class CatchUpController {
     while (this.inFlight.size > 0) await Promise.all([...this.inFlight]);
   }
 
+  /**
+   * You were away for this span (meeting seconds): mark the key "Missed 2m" until pressed.
+   * A second span before the press widens the first. Short spans are ignored.
+   */
+  setMissed(span: MissedSpan): void {
+    if (span.to - span.from < this.o.missedMinS) return;
+    const from = this.missed ? Math.min(this.missed.from, span.from) : span.from;
+    this.missed = { from, to: span.to };
+    if (this.missedTimer !== null) this.o.clock.clearTimeout(this.missedTimer);
+    this.missedTimer = this.o.clock.setTimeout(() => {
+      this.missedTimer = null;
+      this.o.log("catch-up: missed span expired unpressed");
+      this.clearMissed();
+    }, this.o.missedTtlMs);
+    this.o.log(`catch-up: you missed ${longSpan(this.missed.to - this.missed.from)} (from ${this.missed.from.toFixed(0)} s)`);
+    this.refreshKey();
+  }
+
+  missedSpan(): MissedSpan | null {
+    return this.missed ? { ...this.missed } : null;
+  }
+
   /** The summaries generated in this meeting, oldest first. */
   history(): { t: number; body: string }[] {
     return this.summaries.map((s) => ({ ...s }));
   }
 
-  /** Stop any run (meeting restart) and forget the last summary. The caller hides the card. */
+  /** Stop any run (meeting restart), forget the last summary and a missed span. The caller hides the card. */
   cancel(): void {
     const r = this.run;
     this.cardId = null;
     this.last = null;
     this.summaries = [];
     this.lastCallAt = null;
+    this.clearMissed();
     if (!r) return;
     this.run = null;
     this.clearFlush(r);
     r.ac.abort(new LlmError("cancelled", "Cancelled"));
-    this.o.keys.setActionOverride(CATCH_UP_SLOT, null);
+    this.refreshKey();
   }
 
-  private async start(lines: TranscriptLine[]): Promise<void> {
-    const { clock, llm, overlay, keys, log } = this.o;
+  private clearMissed(): void {
+    if (this.missedTimer !== null) this.o.clock.clearTimeout(this.missedTimer);
+    this.missedTimer = null;
+    if (!this.missed) return;
+    this.missed = null;
+    this.refreshKey();
+  }
+
+  /** Slot 6 look: busy while running, "Missed 2m" while a span waits, else its normal label. */
+  private refreshKey(): void {
+    const m = this.missed;
+    this.o.keys.setActionOverride(
+      CATCH_UP_SLOT,
+      this.run ? { state: "busy" } : m ? { label: `Missed ${shortSpan(m.to - m.from)}`, color: MISSED_COLOR, state: "shown" } : null,
+    );
+  }
+
+  private async start(lines: TranscriptLine[], eyebrow = "Catch-up · last 2 min", away = false): Promise<void> {
+    const { clock, llm, overlay, log } = this.o;
     const cardId = overlay.showText({
-      eyebrow: "Catch-up · last 2 min",
+      eyebrow,
       title: "Catch-up",
       streaming: true,
       durationMs: null,
@@ -166,7 +258,7 @@ export class CatchUpController {
     this.run = run;
     this.lastCallAt = run.startedAt;
     this.cardId = cardId;
-    keys.setActionOverride(CATCH_UP_SLOT, { state: "busy" });
+    this.refreshKey();
     log(`catch-up: ${lines.length} lines (${lines[0].t}-${lines[lines.length - 1].t} s) -> ${llm.describe()}`);
     try {
       await withTimeout(
@@ -174,7 +266,7 @@ export class CatchUpController {
         this.o.timeoutMs,
         async (signal) => {
           for await (const delta of llm.stream({
-            messages: catchUpMessages(lines, this.o.listenerName),
+            messages: catchUpMessages(lines, this.o.listenerName, { away }),
             maxTokens: 700,
             temperature: 0.3,
             signal,
@@ -227,7 +319,7 @@ export class CatchUpController {
     } finally {
       if (this.run === run) {
         this.run = null;
-        keys.setActionOverride(CATCH_UP_SLOT, null);
+        this.refreshKey();
       }
     }
   }

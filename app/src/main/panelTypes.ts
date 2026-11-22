@@ -1,4 +1,6 @@
 import type { AudioStatus } from "../pipeline/audioCapture.js";
+import type { AwayReason, FocusState } from "../pipeline/focus.js";
+import type { GazeStatus } from "../pipeline/gazeSource.js";
 import type { PlaybackState } from "../pipeline/mockSource.js";
 import type { KeyState } from "../pipeline/protocol.js";
 import type { SttStatus } from "../pipeline/stt.js";
@@ -41,6 +43,19 @@ export interface PanelLive {
   learnedKeyterms: string[];
 }
 
+/** Camera focus (Logi Gaze Tracker). */
+export interface PanelFocus {
+  state: FocusState;
+  reason?: AwayReason;
+  /** How long the current state has lasted. */
+  forMs: number;
+  simulated: boolean;
+  camera: GazeStatus;
+  /** Set while Catch-up shows "Missed …": the missed span, e.g. "2 min 10 s". */
+  missed?: string;
+  mentionFlashing: boolean;
+}
+
 export interface PanelSnapshot {
   mode: PanelMode;
   playback: PlaybackState;
@@ -49,6 +64,7 @@ export interface PanelSnapshot {
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];
+  focus: PanelFocus;
   /** Last meeting export. */
   export: PanelExport;
 }
@@ -85,5 +101,11 @@ export type PanelCommand =
   | "listen-stop"
   /** arg: the keyterms text (remembered while typing) */
   | "keyterms"
+  /** arg: "on" | "off" */
+  | "sim-away"
+  /** Pretend the mention detector heard your name now. */
+  | "sim-mention"
+  /** Ask the Gaze Tracker for its 9-point calibration. */
+  | "gaze-calibrate"
   /** Write output/meetings/<date>.md and show it in Finder */
   | "export";

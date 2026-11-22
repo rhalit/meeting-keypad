@@ -84,6 +84,18 @@ A press within 500 ms after a shift goes to the term that was on that key before
   `{ "slot": 8, "label": "For me?", "color": "#E5484D", "state": "alert" }` and then alternates `color` between
   `#E5484D` and `#9E2A2F` every 600 ms (pulse). After a press, or 90 s without one, slot 8 goes back to
   `{ "slot": 8, "label": "For me?", "state": "shown" }`. In `alert`, `color` is the background, never the label colour.
+- After you were away (camera focus, see below), slot 6 is sent as
+  `{ "slot": 6, "label": "Missed 2m", "color": "#E3B341", "state": "shown" }` (amber label) until it is
+  pressed (or 5 min pass); a press summarises only what you missed.
+- Mentioned while you are away (a "For me?" question, or your name, while the camera says you look
+  away): the app sends **all 9 slots** as `alert` with `"color": "#E5484D"` (labels and `sub` kept),
+  then their normal state, alternating every 500 ms. It stops when you look back or press any key;
+  that press only stops the pulse and shows the "For me?" card, it does not trigger the key's own action.
+  Slot 8 keeps its own pulse underneath and resumes it when the all-keys pulse stops.
+
+## Camera focus (app only)
+The app reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`, any Logitech webcam) to know whether you
+are looking at the screen. Nothing about it goes to the plugin except the key states above.
 
 ## When the app is unreachable
 The plugin blanks all keys and shows `No app` on slot 4, so it is obvious on the device.

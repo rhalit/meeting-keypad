@@ -18,7 +18,10 @@ export function formatTranscript(lines: TranscriptLine[], opts: { seconds?: bool
   return lines.map((l) => `[${opts.seconds ? `t=${l.t}` : mmss(l.t)}] ${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
 }
 
-export function catchUpMessages(lines: TranscriptLine[], listenerName?: string): ChatMessage[] {
+export function catchUpMessages(lines: TranscriptLine[], listenerName?: string, opts: { away?: boolean } = {}): ChatMessage[] {
+  const span = opts.away
+    ? "the transcript from the moment they looked away until now"
+    : "the last two minutes of the transcript";
   const you = listenerName
     ? ` The reader is ${listenerName}; if someone asked ${listenerName} to do something, put it in the Decided line.`
     : "";
@@ -26,8 +29,7 @@ export function catchUpMessages(lines: TranscriptLine[], listenerName?: string):
     {
       role: "system",
       content:
-        "You help someone who looked away from a meeting catch up. You get the last two minutes of the " +
-        "transcript. Reply with exactly three lines and nothing else:\n" +
+        `You help someone who looked away from a meeting catch up. You get ${span}. Reply with exactly three lines and nothing else:\n` +
         "- Said: <the main thing that was said, at most 18 words>\n" +
         '- Decided: <any decision or agreed task with its owner, or "Nothing decided yet.">\n' +
         "- Now: <what is being discussed right now, at most 18 words>\n" +

@@ -51,6 +51,8 @@ export interface ForMeOptions {
   overlay: OverlayController;
   log: (msg: string) => void;
   onLlmOutcome?: (o: LlmOutcome) => void;
+  /** Called for every question aimed at the listener, right after slot 8 starts pulsing (camera focus uses it). */
+  onQuestion?: (q: ForMeQuestion) => void;
   listener: ListenerProfile & { aliases: string[] };
   /** Transcript before the line sent as context. */
   contextS?: number;
@@ -77,7 +79,7 @@ export type ForMePress = "shown" | "hidden" | "reshown" | "checking" | "nothing"
  * marks them opened and puts the key back to normal. With nothing waiting, it re-shows the last card.
  */
 export class ForMeController {
-  private readonly o: Required<Omit<ForMeOptions, "onLlmOutcome">> & Pick<ForMeOptions, "onLlmOutcome">;
+  private readonly o: Required<Omit<ForMeOptions, "onLlmOutcome" | "onQuestion">> & Pick<ForMeOptions, "onLlmOutcome" | "onQuestion">;
   private waiting: ForMeQuestion[] = [];
   private history: ForMeQuestion[] = [];
   private lastCard: TextCardOptions | null = null;
@@ -243,6 +245,7 @@ export class ForMeController {
       this.history.push(q);
       log(`for-me: ALERT "${q.question}" (${ms} ms, ${this.waiting.length} waiting)`);
       this.startAlert();
+      this.o.onQuestion?.({ ...q });
     } catch (err) {
       if (this.running !== ac) return;
       const e = toLlmError(err);

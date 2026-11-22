@@ -61,6 +61,12 @@ summary (one call, skipped < 30 s said, reused when nothing new), questions, sav
 (opened marked), catch-ups, transcript). Runs on the panel button, Stop listening and the end of the mock meeting (each
 reveals the file in Finder) and silently on a Mock/Live switch. `MeetingRecord` (`meetingRecord.ts`) keeps start time,
 spoken seconds and the terms that reached a key.
+Camera focus: `GazeClient` (`app/src/pipeline/gazeSource.ts`) reads the Logi Gaze Tracker (`ws://127.0.0.1:8964`,
+MX Brio), `FocusTracker` (`focus.ts`) turns it into focused / away (debounced) and away periods. Back from away →
+Catch-up (slot 6) reads `Missed 2m` (amber) and summarises from when you looked away (`catchUp.setMissed`). A "For me?"
+question while away (`ForMeController` `onQuestion`) → `MentionAlert` (`mentionAlert.ts`) pulses all 9 keys red
+(`SlotManager.setFlash`); looking back or any press stops it and opens the For-me card. Panel: camera status,
+focus pill, Simulate away / Simulate mention / Calibrate gaze.
 Do not build features from later phases unless asked.
 
 ## Commands
@@ -95,6 +101,8 @@ Do not build features from later phases unless asked.
 - Live smoke run (plays the mock meeting voiced by `say` through the speakers, real audiotee + Deepgram):
   `cd app && npm run smoke:live` (add `-- --keyterms` for glossary keyterms, `-- --lines 8` for a short run).
   Audio is cached in `tools/mock-audio/` (gitignored). Needs the system audio permission for the terminal.
+- Camera focus: install and calibrate the Logi Gaze Tracker app (README, "Camera focus"). Without it the panel's
+  Simulate away / Simulate mention buttons drive the same logic. `GAZE_WS_URL` overrides the tracker address.
 - System audio permission: System Settings → Privacy & Security → Screen & System Audio Recording →
   "System Audio Recording Only". For `npm run dev` this must be **Electron**
   (add `app/node_modules/electron/dist/Electron.app` with +): macOS credits the permission to Electron,

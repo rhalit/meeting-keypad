@@ -42,6 +42,18 @@
         <button id="export" title="Write output/meetings/&lt;date time&gt;.md and show it in Finder">Export meeting</button>
       </div>
       <div id="llm-error" class="llm-banner" hidden></div>
+      <div class="camera">
+        <div class="status">
+          <span id="camera-text">Camera: off</span>
+          <span id="focus-pill" class="pill">Focus: unknown</span>
+        </div>
+        <div class="controls">
+          <button id="sim-away">Simulate away</button>
+          <button id="sim-mention">Simulate mention</button>
+          <button id="gaze-calibrate">Calibrate gaze</button>
+        </div>
+        <div id="camera-error" class="llm-banner" hidden></div>
+      </div>
     </header>
     <section>
       <h2>Keypad</h2>

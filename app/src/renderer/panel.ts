@@ -36,6 +36,15 @@ interface PanelLiveMsg {
   spotter: PanelStatusMsg;
   learnedKeyterms: string[];
 }
+interface PanelFocusMsg {
+  state: "off" | "focused" | "away";
+  reason?: "no-face" | "off-screen" | "simulated";
+  forMs: number;
+  simulated: boolean;
+  camera: PanelStatusMsg;
+  missed?: string;
+  mentionFlashing: boolean;
+}
 interface PanelSnapshotMsg {
   mode: "mock" | "live";
   playback: PanelPlayback;
@@ -44,6 +53,7 @@ interface PanelSnapshotMsg {
   pluginsConnected: number;
   keys: PanelKey[];
   queued: string[];
+  focus: PanelFocusMsg;
   export: { state: "idle" | "busy" | "ok" | "error"; text: string };
 }
 interface PanelLineMsg {
@@ -90,6 +100,13 @@ const meterFill = $("meter-fill");
 const audioText = $("audio-text");
 const sttText = $("stt-text");
 const liveError = $("live-error");
+const cameraText = $("camera-text");
+const focusPill = $("focus-pill");
+const cameraError = $("camera-error");
+const simAwayBtn = $<HTMLButtonElement>("sim-away");
+const simMentionBtn = $<HTMLButtonElement>("sim-mention");
+const calibrateBtn = $<HTMLButtonElement>("gaze-calibrate");
+let simAway = false;
 const spotterText = $("spotter-text");
 const learnedEl = $("learned");
 const exportBtn = $<HTMLButtonElement>("export");
@@ -147,6 +164,28 @@ function renderLive(s: PanelSnapshotMsg): void {
   if (!listening) meterFill.style.width = "0";
 }
 
+const AWAY_REASON: Record<string, string> = { "no-face": "no face", "off-screen": "looking away", simulated: "simulated" };
+
+function renderFocus(f: PanelFocusMsg): void {
+  const cam = f.camera;
+  cameraText.textContent = cam.text;
+  cameraText.className = cam.state === "tracking" ? "ok" : cam.state === "off" || cam.state === "connecting" ? "" : "warn";
+  cameraError.hidden = !cam.advice;
+  cameraError.textContent = cam.advice ?? "";
+  calibrateBtn.disabled = cam.state === "off" || cam.state === "connecting" || cam.state === "no-tracker";
+  const secs = fmt(f.forMs / 1000);
+  focusPill.className = `pill ${f.state}`;
+  focusPill.textContent =
+    f.state === "away"
+      ? `Away ${secs} · ${AWAY_REASON[f.reason ?? ""] ?? ""}${f.mentionFlashing ? " · mentioned!" : ""}`
+      : f.state === "focused"
+        ? `Focused${f.missed ? ` · missed ${f.missed}` : ""}`
+        : `Focus: unknown${f.missed ? ` · missed ${f.missed}` : ""}`;
+  simAway = f.simulated;
+  simAwayBtn.textContent = simAway ? "Stop simulating away" : "Simulate away";
+  simAwayBtn.classList.toggle("on", simAway);
+}
+
 function renderSnapshot(s: PanelSnapshotMsg): void {
   mode = s.mode;
   modeMockBtn.classList.toggle("active", mode === "mock");
@@ -190,6 +229,7 @@ function renderSnapshot(s: PanelSnapshotMsg): void {
     }),
   );
   queueEl.textContent = s.queued.length ? `Queued: ${s.queued.join(", ")}` : "";
+  renderFocus(s.focus);
   exportText.textContent = s.export.text;
   exportText.className = s.export.state === "ok" ? "ok" : s.export.state === "error" ? "err" : s.export.state === "busy" ? "wait" : "";
   exportBtn.disabled = s.export.state === "busy";
@@ -285,6 +325,9 @@ keytermsEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !listening) window.keypad.control("listen-start", keytermsEl.value);
 });
 restartBtn.addEventListener("click", () => window.keypad.control("restart"));
+simAwayBtn.addEventListener("click", () => window.keypad.control("sim-away", simAway ? "off" : "on"));
+simMentionBtn.addEventListener("click", () => window.keypad.control("sim-mention"));
+calibrateBtn.addEventListener("click", () => window.keypad.control("gaze-calibrate"));
 exportBtn.addEventListener("click", () => window.keypad.control("export"));
 speed1Btn.addEventListener("click", () => window.keypad.control("speed1"));
 speed2Btn.addEventListener("click", () => window.keypad.control("speed2"));

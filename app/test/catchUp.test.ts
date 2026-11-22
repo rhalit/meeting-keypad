@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CATCH_UP_SLOT, CatchUpController, cleanBullets } from "../src/pipeline/catchUp.js";
+import { CATCH_UP_SLOT, CatchUpController, MISSED_COLOR, cleanBullets } from "../src/pipeline/catchUp.js";
 import { LlmError } from "../src/pipeline/llm.js";
 import { OverlayController, type OverlayCard, type TextCard } from "../src/pipeline/overlay.js";
 import type { KeyState } from "../src/pipeline/protocol.js";
@@ -264,6 +264,110 @@ describe("CatchUpController", () => {
     await catchUp.whenIdle();
     expect(cards.filter((c) => c.kind === "text" && c.tone === "error")).toHaveLength(0);
     expect(catchUp.press()).toBe("started");
+  });
+
+  describe("missed span (camera focus)", () => {
+    const key = () => slots.getAll()[CATCH_UP_SLOT];
+
+    it("marks the key 'Missed 2m', then summarises from the moment you looked away", async () => {
+      talk(400);
+      catchUp.setMissed({ from: 250, to: 380 });
+      expect(key()).toMatchObject({ label: "Missed 2m", color: MISSED_COLOR, state: "shown" });
+      expect(catchUp.press()).toBe("started");
+      expect(key().state).toBe("busy");
+      expect(text().eyebrow).toBe("Catch-up · while you were away (2 min 10 s)");
+      const req = llm.last().req;
+      const user = req.messages.find((m) => m.role === "user")!.content;
+      expect(user).toContain("line at 250");
+      expect(user).toContain("line at 400"); // up to now, not only until you looked back
+      expect(user).not.toContain("line at 245");
+      expect(req.messages[0].content).toContain("from the moment they looked away until now");
+      llm.last().push("- Said: x").end();
+      await catchUp.whenIdle();
+      expect(key()).toMatchObject({ label: "Catch-up", state: "shown" }); // back to normal after the press
+      expect(catchUp.missedSpan()).toBeNull();
+    });
+
+    it("after it, the usual guards apply: nothing new -> re-shown; new line + cooldown -> normal 2-minute catch-up", async () => {
+      talk(400);
+      catchUp.setMissed({ from: 100, to: 380 });
+      catchUp.press();
+      llm.last().push("- Said: x").end();
+      await catchUp.whenIdle();
+      catchUp.press(); // hides the finished card
+      expect(catchUp.press()).toBe("reshown");
+      expect(llm.calls).toHaveLength(1);
+      transcript.add({ t: 405, speaker: "Lena", text: "one more thing" });
+      now = 405;
+      clock.advance(10_000);
+      catchUp.press(); // hides the re-shown card
+      expect(catchUp.press()).toBe("started");
+      expect(text().eyebrow).toBe("Catch-up · last 2 min");
+    });
+
+    it("a missed span skips the 'nothing new' re-show guard", async () => {
+      talk(400);
+      catchUp.press();
+      llm.last().push("- Said: x").end();
+      await catchUp.whenIdle();
+      clock.advance(10_000);
+      catchUp.setMissed({ from: 300, to: 400 });
+      catchUp.press(); // the summary card is still visible, but a missed span wins over the hide toggle
+      expect(text().eyebrow).toBe("Catch-up · while you were away (1 min 40 s)");
+      expect(llm.calls).toHaveLength(2);
+    });
+
+    it("ignores spans under 10 s; widens an unpressed span; caps at 15 min back", () => {
+      talk(2000);
+      catchUp.setMissed({ from: 100, to: 105 });
+      expect(catchUp.missedSpan()).toBeNull();
+      catchUp.setMissed({ from: 300, to: 330 });
+      catchUp.setMissed({ from: 400, to: 460 });
+      expect(catchUp.missedSpan()).toEqual({ from: 300, to: 460 });
+      expect(key().label).toBe("Missed 3m");
+      catchUp.press();
+      const user = llm.last().req.messages.find((m) => m.role === "user")!.content;
+      expect(user).toContain("line at 1100"); // 2000 - 900
+      expect(user).not.toContain("line at 1095");
+    });
+
+    it("seconds-long spans read like 'Missed 45s'", () => {
+      talk(100);
+      catchUp.setMissed({ from: 50, to: 95 });
+      expect(key().label).toBe("Missed 45s");
+    });
+
+    it("nothing said while away -> short card, no model call", () => {
+      transcript.add({ t: 10, speaker: "Lena", text: "hello" });
+      now = 200;
+      catchUp.setMissed({ from: 100, to: 190 });
+      expect(catchUp.press()).toBe("not-much");
+      expect(llm.calls).toHaveLength(0);
+      expect(text().title).toBe("Nothing was said while you were away.");
+      expect(key().label).toBe("Catch-up");
+    });
+
+    it("expires after 5 min unpressed; cancel() forgets it too", () => {
+      talk(100);
+      catchUp.setMissed({ from: 20, to: 90 });
+      clock.advance(300_000);
+      expect(key().label).toBe("Catch-up");
+      catchUp.setMissed({ from: 20, to: 90 });
+      catchUp.cancel();
+      expect(catchUp.missedSpan()).toBeNull();
+      expect(key().label).toBe("Catch-up");
+      expect(clock.pending()).toBe(0);
+    });
+
+    it("a span arriving mid-run shows after the run", async () => {
+      talk(200);
+      catchUp.press();
+      catchUp.setMissed({ from: 100, to: 190 });
+      expect(key().state).toBe("busy");
+      llm.last().push("- Said: x").end();
+      await catchUp.whenIdle();
+      expect(key().label).toBe("Missed 2m");
+    });
   });
 });
 
